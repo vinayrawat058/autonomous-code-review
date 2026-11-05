@@ -4,7 +4,7 @@
 
 ## Idea
 
-Build a full-stack AI system that reviews pull-request diffs like a senior engineer: pull surrounding code and security-policy context (dual-layer RAG), run a LangGraph agent through security audit → refactor → sandbox test loops, stream live progress to a React UI, and pause for human approval before creating a PR.
+Building a full-stack AI system that reviews pull-request diffs like a senior engineer: pull surrounding code and security-policy context (dual-layer RAG), run a LangGraph agent through security audit → refactor → sandbox test loops, stream live progress to a React UI, and pause for human approval before creating a PR.
 
 ## Why this is different from similar AI agents
 
