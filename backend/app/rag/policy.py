@@ -1,9 +1,13 @@
 """
 RAG Layer 2 — Policy / security rules.
 
-Indexes OWASP Top 10 notes and internal guidelines from data/policies/
-so the SecurityAudit node cites real rules instead of hallucinating.
+The rulebook is short, so the security step currently receives the whole file.
+A vector search over these notes comes later.
 """
+
+from pathlib import Path
+
+_POLICIES_DIR = Path(__file__).resolve().parents[2] / "data" / "policies"
 
 
 def index_policies(policies_dir: str = "data/policies") -> None:
@@ -12,6 +16,12 @@ def index_policies(policies_dir: str = "data/policies") -> None:
 
 
 def retrieve_policy_context(query: str) -> str:
-    """Placeholder — similarity search over security policies."""
+    """Return the security rulebook text. `query` is unused until vector search."""
     _ = query
-    return ""
+    if not _POLICIES_DIR.is_dir():
+        return ""
+    parts = [
+        path.read_text(encoding="utf-8")
+        for path in sorted(_POLICIES_DIR.glob("*.md"))
+    ]
+    return "\n\n".join(parts).strip()
