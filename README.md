@@ -1,6 +1,17 @@
 # Agentic PR Review Studio
 
-**Status:** Work in progress. Backend skeleton is in place; agent logic, streaming, and the UI are not built yet.
+**Status:** Work in progress. The core review path runs locally. Streaming and the UI are not built yet.
+
+## Done so far
+
+The agent walks five steps: ingest the diff, load context, security audit, refactor, then sandbox tests.
+
+- **Security audit** sends the diff and the OWASP rulebook to Groq and returns a cited finding.
+- **Refactor** rewrites that diff from the finding. On the sample login change, the pasted username becomes a `?` placeholder.
+- **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
+- **Ingest** stores the pasted diff. **Retrieve** loads the whole rulebook file. Nearby-code search and a vector database are not built yet.
+
+The API key stays in `backend/.env` and is not committed. Run the path from `backend` with `.venv\Scripts\python.exe scripts\run_stub_review.py`.
 
 ## Idea
 
@@ -19,7 +30,7 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 
 Build in this order so each piece can be tested before the next one is added.
 
-1. **Core agent (Python / LangGraph)** — shared review state, then the node sequence: ingest the diff, retrieve RAG context, security audit, refactor, run sandbox tests. If tests fail and retries remain, loop back to refactor.
+1. **Core agent (Python / LangGraph)** — in progress. Security, refactor, and the sandbox retry loop run. Still to do: parse real diffs, search nearby code, and index the rulebook in a vector database.
 2. **FastAPI + SSE** — `POST /api/agent/stream` runs that graph and streams node and token events to the browser. Approval is a separate REST call, not GraphQL.
 3. **React UI** — split-screen Monaco diff (original vs refactored) and a client that consumes the event stream.
 4. **Graph view and approval** — sidebar of node states (idle, running, passed) and a modal that resumes the graph only after you approve PR creation.

@@ -16,6 +16,7 @@ class GraphState(TypedDict, total=False):
     # Input
     diff: str
     repo_path: str | None
+    test_code: str
 
     # RAG context
     code_context: str

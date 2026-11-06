@@ -12,7 +12,7 @@ def get_chat_model() -> ChatOpenAI:
         openai_api_key=settings.groq_api_key,
         openai_api_base=settings.groq_base_url,
         temperature=0,
-        max_tokens=500,
+        max_tokens=2000,
         use_responses_api=False,
     )
 
