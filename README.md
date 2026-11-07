@@ -9,7 +9,8 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Security audit** sends the diff and the OWASP rulebook to Groq and returns a cited finding.
 - **Refactor** rewrites that diff from the finding. On the sample login change, the pasted username becomes a `?` placeholder.
 - **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
-- **Ingest** stores the pasted diff. **Retrieve** loads the whole rulebook file. Nearby-code search and a vector database are not built yet.
+- **Ingest** stores the pasted diff.
+- **Retrieve** now fills both shelves: nearby Python files from a local `repo_path` (sample repo under `backend/data/sample_repo`), plus the whole OWASP rulebook. A vector database is still later.
 
 The API key stays in `backend/.env` and is not committed. Run the path from `backend` with `.venv\Scripts\python.exe scripts\run_stub_review.py`.
 
@@ -30,7 +31,7 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 
 Build in this order so each piece can be tested before the next one is added.
 
-1. **Core agent (Python / LangGraph)** — in progress. Security, refactor, and the sandbox retry loop run. Still to do: parse real diffs, search nearby code, and index the rulebook in a vector database.
+1. **Core agent (Python / LangGraph)** — in progress. Security, refactor, sandbox retry, and local nearby-code search run. Still to do: vector-database RAG and richer diff parsing.
 2. **FastAPI + SSE** — `POST /api/agent/stream` runs that graph and streams node and token events to the browser. Approval is a separate REST call, not GraphQL.
 3. **React UI** — split-screen Monaco diff (original vs refactored) and a client that consumes the event stream.
 4. **Graph view and approval** — sidebar of node states (idle, running, passed) and a modal that resumes the graph only after you approve PR creation.

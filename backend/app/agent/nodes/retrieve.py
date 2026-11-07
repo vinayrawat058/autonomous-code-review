@@ -11,7 +11,7 @@ from app.rag import codebase, policy
 
 
 def retrieve_rag_context(state: GraphState) -> dict:
-    """Placeholder — Phase 1 wires real retrievers."""
+    """Fill both shelves: nearby project code, then the security rulebook."""
     query = state.get("diff") or ""
     code_context = codebase.retrieve_code_context(query, state.get("repo_path"))
     policy_context = policy.retrieve_policy_context(query)
