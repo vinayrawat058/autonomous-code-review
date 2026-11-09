@@ -1,8 +1,8 @@
 """
 FastAPI application entrypoint.
 
-Run (later):
-    uvicorn app.main:app --reload --app-dir backend
+From the backend folder:
+    .venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000
 """
 
 from fastapi import FastAPI

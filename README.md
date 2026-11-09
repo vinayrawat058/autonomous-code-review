@@ -1,6 +1,6 @@
 # Agentic PR Review Studio
 
-**Status:** Work in progress. The core review path runs locally. Streaming and the UI are not built yet.
+**Status:** Work in progress. The core review path runs locally and can stream over FastAPI SSE. The React UI is not built yet.
 
 ## Done so far
 
@@ -11,8 +11,17 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
 - **Ingest** stores the pasted diff.
 - **Retrieve** now fills both shelves: nearby Python files from a local `repo_path` (sample repo under `backend/data/sample_repo`), plus the whole OWASP rulebook. A vector database is still later.
+- **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / `done` events to the client.
 
-The API key stays in `backend/.env` and is not committed. Run the path from `backend` with `.venv\Scripts\python.exe scripts\run_stub_review.py`.
+The API key stays in `backend/.env` and is not committed.
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\run_stub_review.py
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+# other terminal:
+.\.venv\Scripts\python.exe scripts\demo_stream.py
+```
 
 ## Idea
 
@@ -32,7 +41,7 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 Build in this order so each piece can be tested before the next one is added.
 
 1. **Core agent (Python / LangGraph)** — in progress. Security, refactor, sandbox retry, and local nearby-code search run. Still to do: vector-database RAG and richer diff parsing.
-2. **FastAPI + SSE** — `POST /api/agent/stream` runs that graph and streams node and token events to the browser. Approval is a separate REST call, not GraphQL.
+2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step; token-level streaming and `/approve` come later.
 3. **React UI** — split-screen Monaco diff (original vs refactored) and a client that consumes the event stream.
 4. **Graph view and approval** — sidebar of node states (idle, running, passed) and a modal that resumes the graph only after you approve PR creation.
 

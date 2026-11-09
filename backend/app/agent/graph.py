@@ -51,5 +51,5 @@ def build_graph():
     return graph.compile()
 
 
-# Compiled once; imported by the API layer in Phase 2.
-# workflow = build_graph()  # enable after nodes are real
+# Compiled once for the FastAPI streaming route.
+workflow = build_graph()

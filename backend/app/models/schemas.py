@@ -17,6 +17,10 @@ class PRPayload(BaseModel):
         default=None,
         description="Optional local path to the full repo (for Codebase RAG).",
     )
+    test_code: str | None = Field(
+        default=None,
+        description="Optional pytest source run against the rewrite in the sandbox.",
+    )
 
 
 class AgentEvent(BaseModel):
