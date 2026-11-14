@@ -1,6 +1,6 @@
 # Agentic PR Review Studio
 
-**Status:** Work in progress. Backend agent + SSE API run; the React studio can start a review, show live node status, and display a Monaco diff.
+**Status:** Work in progress. Backend agent + SSE API + React studio run end to end, including Approve → GitHub PR (dry-run without a token).
 
 ## Done so far
 
@@ -12,9 +12,10 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Ingest** stores the pasted diff.
 - **Retrieve** now fills both shelves: nearby Python files from a local `repo_path` (sample repo under `backend/data/sample_repo`), plus the whole OWASP rulebook. A vector database is still later.
 - **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / `done` events to the client.
-- **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject (PR creation still later).
+- **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject.
+- **Approve → PR** — `POST /api/agent/approve` creates a branch and opens a GitHub pull request with the rewritten file. Without `GITHUB_TOKEN`, it returns a dry-run compare URL.
 
-The API key stays in `backend/.env` and is not committed.
+Secrets stay in `backend/.env` and are not committed. Add a GitHub PAT with `repo` scope as `GITHUB_TOKEN` for a real PR.
 
 ```powershell
 # API
@@ -46,8 +47,8 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 Build in this order so each piece can be tested before the next one is added.
 
 1. **Core agent (Python / LangGraph)** — in progress. Security, refactor, sandbox retry, and local nearby-code search run. Still to do: vector-database RAG and richer diff parsing.
-2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step; token-level streaming and `/approve` come later.
-3. **React UI** — done for the first studio pass (form, SSE hook, Monaco diff, sidebar).
-4. **Graph view and approval** — sidebar + modal are in the UI; wiring Approve to create a real GitHub PR is still ahead.
+2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step.
+3. **React UI** — done (form, SSE hook, Monaco diff, sidebar).
+4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`). Still ahead: vector-database RAG and richer multi-file diff apply.
 
 Stack: Python, FastAPI, LangGraph, Qdrant (or pgvector) for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and runs tests in a temp folder; GitHub PR creation and stricter sandbox isolation come after the loop works locally.

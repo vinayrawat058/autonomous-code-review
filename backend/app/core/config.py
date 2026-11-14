@@ -39,5 +39,11 @@ class Settings(BaseSettings):
     # LangGraph retry loop max (PDF: 3)
     max_refactor_iterations: int = 3
 
+    # GitHub PR creation on approve (optional — without a token, approve is a dry run)
+    github_token: str = ""
+    github_default_owner: str = ""
+    github_default_repo: str = ""
+    github_default_base: str = "main"
+
 
 settings = Settings()

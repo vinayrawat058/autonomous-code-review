@@ -30,4 +30,5 @@ export interface DoneEventData {
   refactored_code: string;
   test_errors: string[];
   iteration: number;
+  suggested_file_path?: string;
 }

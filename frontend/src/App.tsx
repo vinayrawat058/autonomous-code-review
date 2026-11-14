@@ -1,8 +1,9 @@
 /**
- * Studio shell: form → live graph → Monaco diff → approval modal.
+ * Studio shell: form → live graph → Monaco diff → approval → GitHub PR.
  */
 
 import { useState } from "react";
+import { approveReview } from "./api/approve";
 import { ApprovalModal } from "./components/ApprovalModal";
 import { DiffViewer } from "./components/DiffViewer";
 import { GraphSidebar } from "./components/GraphSidebar";
@@ -25,8 +26,12 @@ export default function App() {
   } = useAgentStream();
 
   const [originalDiff, setOriginalDiff] = useState("");
+  const [threadId, setThreadId] = useState("");
+  const [suggestedFilePath, setSuggestedFilePath] = useState("app.py");
   const [decision, setDecision] = useState<string | null>(null);
+  const [prUrl, setPrUrl] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   async function handleSubmit(input: {
     diff_text: string;
@@ -34,14 +39,20 @@ export default function App() {
     test_code: string;
   }) {
     setDecision(null);
+    setPrUrl(null);
     setModalOpen(false);
     setOriginalDiff(input.diff_text);
-    await startReview({
-      thread_id: crypto.randomUUID(),
+    const id = crypto.randomUUID();
+    setThreadId(id);
+    const result = await startReview({
+      thread_id: id,
       diff_text: input.diff_text,
       repo_path: input.repo_path || null,
       test_code: input.test_code || null,
     });
+    if (result?.suggested_file_path) {
+      setSuggestedFilePath(result.suggested_file_path);
+    }
     setModalOpen(true);
   }
 
@@ -52,8 +63,8 @@ export default function App() {
           Agentic PR Review Studio
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Paste a change, watch the agent steps stream live, then approve the
-          rewrite.
+          Paste a change, watch the agent steps stream live, then approve a
+          GitHub pull request.
         </p>
       </header>
 
@@ -69,6 +80,19 @@ export default function App() {
           {decision && (
             <p className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">
               {decision}
+              {prUrl && (
+                <>
+                  {" "}
+                  <a
+                    className="text-emerald-400 underline"
+                    href={prUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open PR
+                  </a>
+                </>
+              )}
             </p>
           )}
           <DiffViewer original={originalDiff} modified={refactoredCode} />
@@ -80,15 +104,44 @@ export default function App() {
         findings={findings}
         testErrors={testErrors}
         iteration={iteration}
-        onApprove={() => {
-          setDecision("Approved — PR creation will hook up in a later step.");
-          setModalOpen(false);
+        defaultOwner="vinayrawat058"
+        defaultRepo="autonomous-code-review"
+        defaultFilePath={suggestedFilePath}
+        approving={approving}
+        onApprove={async (input) => {
+          if (!threadId) return;
+          setApproving(true);
+          try {
+            const result = await approveReview({
+              thread_id: threadId,
+              owner: input.owner,
+              repo: input.repo,
+              base_branch: input.base_branch,
+              file_path: input.file_path,
+              title: input.title,
+            });
+            setPrUrl(result.pr_url);
+            setDecision(
+              result.dry_run
+                ? `${result.message} Compare URL ready.`
+                : result.message,
+            );
+            setModalOpen(false);
+          } catch (err) {
+            setDecision(
+              err instanceof Error ? err.message : "Failed to open pull request.",
+            );
+          } finally {
+            setApproving(false);
+          }
         }}
         onReject={() => {
           setDecision("Rejected — rewrite discarded from this session.");
+          setPrUrl(null);
           setModalOpen(false);
           reset();
           setOriginalDiff("");
+          setThreadId("");
         }}
       />
     </div>

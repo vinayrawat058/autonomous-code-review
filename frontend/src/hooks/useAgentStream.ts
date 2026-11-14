@@ -4,7 +4,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { streamAgentReview } from "../api/stream";
-import type { NodeName, NodeStatus, PRPayload } from "../api/types";
+import type { DoneEventData, NodeName, NodeStatus, PRPayload } from "../api/types";
 
 const NODES: NodeName[] = [
   "ingest",
@@ -49,83 +49,91 @@ export function useAgentStream() {
     setRunning(false);
   }, []);
 
-  const startReview = useCallback(async (payload: PRPayload) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  const startReview = useCallback(
+    async (payload: PRPayload): Promise<DoneEventData | null> => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    setNodeStatus(idleMap());
-    setFindings([]);
-    setRefactoredCode("");
-    setTestErrors([]);
-    setIteration(0);
-    setDone(false);
-    setError(null);
-    setRunning(true);
+      setNodeStatus(idleMap());
+      setFindings([]);
+      setRefactoredCode("");
+      setTestErrors([]);
+      setIteration(0);
+      setDone(false);
+      setError(null);
+      setRunning(true);
 
-    try {
-      await streamAgentReview(
-        payload,
-        {
-          onNode: (data) => {
-            const name = String(data.active_node);
-            if (!isNodeName(name)) return;
+      const doneRef: { current: DoneEventData | null } = { current: null };
 
-            setNodeStatus((prev) => {
-              const next = { ...prev };
-              for (const node of NODES) {
-                if (next[node] === "running") next[node] = "passed";
+      try {
+        await streamAgentReview(
+          payload,
+          {
+            onNode: (data) => {
+              const name = String(data.active_node);
+              if (!isNodeName(name)) return;
+
+              setNodeStatus((prev) => {
+                const next = { ...prev };
+                for (const node of NODES) {
+                  if (next[node] === "running") next[node] = "passed";
+                }
+                next[name] = "running";
+                return next;
+              });
+
+              const update = data.update ?? {};
+              if (Array.isArray(update.findings)) {
+                setFindings(update.findings.map(String));
               }
-              next[name] = "running";
-              return next;
-            });
-
-            const update = data.update ?? {};
-            if (Array.isArray(update.findings)) {
-              setFindings(update.findings.map(String));
-            }
-            if (typeof update.refactored_code === "string") {
-              setRefactoredCode(update.refactored_code);
-            }
-            if (Array.isArray(update.test_errors)) {
-              const errors = update.test_errors.map(String);
-              setTestErrors(errors);
-              if (errors.length && name === "sandbox") {
-                setNodeStatus((prev) => ({ ...prev, sandbox: "failed" }));
+              if (typeof update.refactored_code === "string") {
+                setRefactoredCode(update.refactored_code);
               }
-            }
-            if (typeof update.iteration === "number") {
-              setIteration(update.iteration);
-            }
+              if (Array.isArray(update.test_errors)) {
+                const errors = update.test_errors.map(String);
+                setTestErrors(errors);
+                if (errors.length && name === "sandbox") {
+                  setNodeStatus((prev) => ({ ...prev, sandbox: "failed" }));
+                }
+              }
+              if (typeof update.iteration === "number") {
+                setIteration(update.iteration);
+              }
+            },
+            onDone: (data) => {
+              doneRef.current = data;
+              setFindings(data.findings ?? []);
+              setRefactoredCode(data.refactored_code ?? "");
+              setTestErrors(data.test_errors ?? []);
+              setIteration(data.iteration ?? 0);
+              setNodeStatus((prev) => {
+                const next = { ...prev };
+                for (const node of NODES) {
+                  if (next[node] === "running") next[node] = "passed";
+                  if (next[node] === "idle") next[node] = "passed";
+                }
+                if ((data.test_errors ?? []).length) next.sandbox = "failed";
+                return next;
+              });
+              setDone(true);
+            },
+            onError: (message) => setError(message),
           },
-          onDone: (data) => {
-            setFindings(data.findings ?? []);
-            setRefactoredCode(data.refactored_code ?? "");
-            setTestErrors(data.test_errors ?? []);
-            setIteration(data.iteration ?? 0);
-            setNodeStatus((prev) => {
-              const next = { ...prev };
-              for (const node of NODES) {
-                if (next[node] === "running") next[node] = "passed";
-                if (next[node] === "idle") next[node] = "passed";
-              }
-              if ((data.test_errors ?? []).length) next.sandbox = "failed";
-              return next;
-            });
-            setDone(true);
-          },
-          onError: (message) => setError(message),
-        },
-        controller.signal,
-      );
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRunning(false);
-      abortRef.current = null;
-    }
-  }, []);
+          controller.signal,
+        );
+        return doneRef.current;
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return null;
+        setError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+      }
+    },
+    [],
+  );
 
   return {
     nodes: NODES,

@@ -28,3 +28,34 @@ class AgentEvent(BaseModel):
 
     event: str
     data: dict
+
+
+class ApprovePayload(BaseModel):
+    """Body for POST /api/agent/approve — human gate before opening a PR."""
+
+    thread_id: str = Field(..., description="Same id used when the review was streamed.")
+    owner: str = Field(..., description="GitHub repo owner, e.g. vinayrawat058.")
+    repo: str = Field(..., description="GitHub repo name, e.g. autonomous-code-review.")
+    base_branch: str = Field(default="main", description="Branch to open the PR against.")
+    file_path: str = Field(
+        default="app.py",
+        description="Path in the repo to write the rewritten code to.",
+    )
+    title: str | None = Field(
+        default=None,
+        description="Optional PR title. Defaults to an agent-generated title.",
+    )
+    body: str | None = Field(
+        default=None,
+        description="Optional PR body. Defaults to findings from the review.",
+    )
+
+
+class ApproveResponse(BaseModel):
+    status: str
+    thread_id: str
+    pr_url: str
+    branch: str
+    number: int | None = None
+    dry_run: bool = False
+    message: str = ""

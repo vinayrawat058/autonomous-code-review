@@ -1,14 +1,26 @@
 /**
  * Human-in-the-loop gate after the stream finishes.
- * Approve endpoint is still a backend stub — UI records the choice locally.
+ * Approve calls POST /api/agent/approve to open a GitHub PR.
  */
+
+import { useEffect, useState } from "react";
 
 type Props = {
   open: boolean;
   findings: string[];
   testErrors: string[];
   iteration: number;
-  onApprove: () => void;
+  defaultOwner: string;
+  defaultRepo: string;
+  defaultFilePath: string;
+  approving: boolean;
+  onApprove: (input: {
+    owner: string;
+    repo: string;
+    base_branch: string;
+    file_path: string;
+    title: string;
+  }) => void;
   onReject: () => void;
 };
 
@@ -17,18 +29,35 @@ export function ApprovalModal({
   findings,
   testErrors,
   iteration,
+  defaultOwner,
+  defaultRepo,
+  defaultFilePath,
+  approving,
   onApprove,
   onReject,
 }: Props) {
+  const [owner, setOwner] = useState(defaultOwner);
+  const [repo, setRepo] = useState(defaultRepo);
+  const [baseBranch, setBaseBranch] = useState("main");
+  const [filePath, setFilePath] = useState(defaultFilePath);
+  const [title, setTitle] = useState("Agentic PR Review Studio: security fix");
+
+  useEffect(() => {
+    if (!open) return;
+    setOwner(defaultOwner);
+    setRepo(defaultRepo);
+    setFilePath(defaultFilePath);
+  }, [open, defaultOwner, defaultRepo, defaultFilePath]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-zinc-700 bg-zinc-900 p-6 shadow-xl">
-        <h2 className="text-lg font-medium">Review finished</h2>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 p-6 shadow-xl">
+        <h2 className="text-lg font-medium">Approve and open pull request</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Iteration {iteration}. Approve to keep the rewrite, or reject and
-          discard it. GitHub PR creation wires up later.
+          Iteration {iteration}. Confirm the GitHub target, then Approve to
+          create a branch and PR with the rewritten code.
         </p>
 
         {findings.length > 0 && (
@@ -60,16 +89,71 @@ export function ApprovalModal({
           </div>
         )}
 
+        <div className="mt-4 grid gap-3">
+          <label className="grid gap-1 text-sm">
+            <span className="text-zinc-400">GitHub owner</span>
+            <input
+              className="rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+              placeholder="vinayrawat058"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-zinc-400">Repository</span>
+            <input
+              className="rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              placeholder="autonomous-code-review"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-zinc-400">Base branch</span>
+            <input
+              className="rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+              value={baseBranch}
+              onChange={(e) => setBaseBranch(e.target.value)}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-zinc-400">File path to write</span>
+            <input
+              className="rounded border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm outline-none focus:border-zinc-500"
+              value={filePath}
+              onChange={(e) => setFilePath(e.target.value)}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-zinc-400">PR title</span>
+            <input
+              className="rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </label>
+        </div>
+
         <div className="mt-6 flex gap-3">
           <button
             type="button"
-            onClick={onApprove}
-            className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+            disabled={approving || !owner.trim() || !repo.trim() || !filePath.trim()}
+            onClick={() =>
+              onApprove({
+                owner: owner.trim(),
+                repo: repo.trim(),
+                base_branch: baseBranch.trim() || "main",
+                file_path: filePath.trim(),
+                title: title.trim() || "Agentic PR Review Studio: security fix",
+              })
+            }
+            className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-700"
           >
-            Approve
+            {approving ? "Opening PR…" : "Approve & open PR"}
           </button>
           <button
             type="button"
+            disabled={approving}
             onClick={onReject}
             className="rounded border border-zinc-600 px-4 py-2 text-sm text-zinc-200"
           >
