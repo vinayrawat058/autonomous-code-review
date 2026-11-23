@@ -10,7 +10,7 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Refactor** rewrites that diff from the finding. On the sample login change, the pasted username becomes a `?` placeholder.
 - **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
 - **Ingest** stores the pasted diff.
-- **Retrieve** now fills both shelves: nearby Python files from a local `repo_path` (sample repo under `backend/data/sample_repo`), plus the whole OWASP rulebook. A vector database is still later.
+- **Retrieve (vector RAG)** embeds the local `repo_path` and `data/policies` into **Qdrant** (on-disk by default, no Docker) with **FastEmbed**, then pulls the nearest code chunks and OWASP sections for the diff.
 - **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / `done` events to the client.
 - **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject.
 - **Approve → PR** — `POST /api/agent/approve` creates a branch and opens a GitHub pull request with the rewritten file. Without `GITHUB_TOKEN`, it returns a dry-run compare URL.
@@ -46,9 +46,9 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 
 Build in this order so each piece can be tested before the next one is added.
 
-1. **Core agent (Python / LangGraph)** — in progress. Security, refactor, sandbox retry, and local nearby-code search run. Still to do: vector-database RAG and richer diff parsing.
+1. **Core agent (Python / LangGraph)** — done for the local loop (security, refactor, sandbox retry, dual-layer Qdrant RAG). Still ahead: richer multi-file diff parsing/apply.
 2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step.
 3. **React UI** — done (form, SSE hook, Monaco diff, sidebar).
-4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`). Still ahead: vector-database RAG and richer multi-file diff apply.
+4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`).
 
-Stack: Python, FastAPI, LangGraph, Qdrant (or pgvector) for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and runs tests in a temp folder; GitHub PR creation and stricter sandbox isolation come after the loop works locally.
+Stack: Python, FastAPI, LangGraph, Qdrant + FastEmbed for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and runs tests in a temp folder. Optional next: token SSE, LangGraph interrupt-before-PR, Docker sandbox.
