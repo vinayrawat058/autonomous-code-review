@@ -23,9 +23,18 @@ class Settings(BaseSettings):
     groq_base_url: str = "https://api.groq.com/openai/v1"
     llm_model: str = "openai/gpt-oss-20b"
 
-    qdrant_url: str = "http://localhost:6333"
+    # Vector RAG — default is embedded Qdrant on disk (no Docker).
+    # Set QDRANT_URL to use a remote server instead; QDRANT_PATH=:memory: for tests.
+    qdrant_url: str = ""
+    qdrant_path: str = ".qdrant"
     qdrant_collection_code: str = "codebase"
     qdrant_collection_policy: str = "policies"
+    embedding_backend: str = "fastembed"  # fastembed | hash
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dim: int = 384  # used by hash backend; fastembed probes real size
+    rag_top_k_code: int = 4
+    rag_top_k_policy: int = 4
+    rag_max_chars: int = 4000
 
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
 

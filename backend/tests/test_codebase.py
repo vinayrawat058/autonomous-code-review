@@ -1,8 +1,8 @@
-"""Nearby-code search returns matching files from a local repo folder."""
+"""Nearby-code vector search returns matching files from a local repo folder."""
 
 from pathlib import Path
 
-from app.rag.codebase import retrieve_code_context
+from app.rag.codebase import index_repository, retrieve_code_context
 from app.rag.diff_parse import changed_paths, search_terms
 
 SAMPLE_REPO = Path(__file__).resolve().parents[1] / "data" / "sample_repo"
@@ -26,7 +26,10 @@ def test_changed_paths_and_terms():
     assert "query" in terms
 
 
-def test_retrieve_finds_app_and_db_helpers():
+def test_index_and_retrieve_finds_app_and_db_helpers():
+    written = index_repository(str(SAMPLE_REPO), force=True)
+    assert written >= 2
+
     context = retrieve_code_context(DIFF, str(SAMPLE_REPO))
     assert "# app.py" in context
     assert "# db.py" in context
