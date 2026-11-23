@@ -46,7 +46,7 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 
 Build in this order so each piece can be tested before the next one is added.
 
-1. **Core agent (Python / LangGraph)** — done for the local loop (security, refactor, sandbox retry, dual-layer Qdrant RAG). Still ahead: richer multi-file diff parsing/apply.
+1. **Core agent (Python / LangGraph)** — done for the local loop (security, refactor, sandbox retry, dual-layer Qdrant RAG). Approve parses full multi-file diffs and writes every touched file into the PR.
 2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step.
 3. **React UI** — done (form, SSE hook, Monaco diff, sidebar).
 4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`).

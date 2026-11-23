@@ -31,4 +31,5 @@ export interface DoneEventData {
   test_errors: string[];
   iteration: number;
   suggested_file_path?: string;
+  suggested_file_paths?: string[];
 }
