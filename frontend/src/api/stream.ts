@@ -2,24 +2,31 @@
  * Client for POST /api/agent/stream.
  *
  * Uses fetch() + ReadableStream (not EventSource) because the backend
- * expects a POST body with the diff.
+ * expects a POST body with the diff. Handles node + live token events.
  */
 
-import type { DoneEventData, NodeEventData, PRPayload } from "./types";
+import type {
+  DoneEventData,
+  LlmEndEventData,
+  LlmStartEventData,
+  NodeEventData,
+  PRPayload,
+  TokenEventData,
+} from "./types";
 
 const baseUrl = () => import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
 export type StreamHandlers = {
   onStarted?: (threadId: string) => void;
   onNode?: (data: NodeEventData) => void;
+  onToken?: (data: TokenEventData) => void;
+  onLlmStart?: (data: LlmStartEventData) => void;
+  onLlmEnd?: (data: LlmEndEventData) => void;
   onDone?: (data: DoneEventData) => void;
   onError?: (message: string) => void;
 };
 
-function parseSseChunk(
-  buffer: string,
-  handlers: StreamHandlers,
-): string {
+function parseSseChunk(buffer: string, handlers: StreamHandlers): string {
   const parts = buffer.split("\n\n");
   const rest = parts.pop() ?? "";
 
@@ -49,6 +56,12 @@ function parseSseChunk(
       handlers.onStarted?.(threadId);
     } else if (eventName === "node") {
       handlers.onNode?.(payload as NodeEventData);
+    } else if (eventName === "token") {
+      handlers.onToken?.(payload as TokenEventData);
+    } else if (eventName === "llm_start") {
+      handlers.onLlmStart?.(payload as LlmStartEventData);
+    } else if (eventName === "llm_end") {
+      handlers.onLlmEnd?.(payload as LlmEndEventData);
     } else if (eventName === "done") {
       handlers.onDone?.(payload as DoneEventData);
     } else if (eventName === "error") {

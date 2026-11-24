@@ -24,6 +24,20 @@ export interface NodeEventData {
   update: Record<string, unknown>;
 }
 
+export interface TokenEventData {
+  node: string;
+  token: string;
+}
+
+export interface LlmStartEventData {
+  node: string;
+}
+
+export interface LlmEndEventData {
+  node: string;
+  text: string;
+}
+
 export interface DoneEventData {
   thread_id: string;
   findings: string[];

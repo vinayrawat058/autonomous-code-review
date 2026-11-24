@@ -11,7 +11,7 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
 - **Ingest** stores the pasted diff.
 - **Retrieve (vector RAG)** embeds the local `repo_path` and `data/policies` into **Qdrant** (on-disk by default, no Docker) with **FastEmbed**, then pulls the nearest code chunks and OWASP sections for the diff.
-- **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / `done` events to the client.
+- **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / live `token` (plus `llm_start` / `llm_end`) / `done` events to the client.
 - **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject.
 - **Approve → PR** — `POST /api/agent/approve` creates a branch and opens a GitHub pull request with the rewritten file. Without `GITHUB_TOKEN`, it returns a dry-run compare URL.
 
@@ -39,7 +39,7 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 
 - **Dual-layer RAG** grounds the review in real nearby code (beyond the diff) and in OWASP / policy rules, so findings cite actual lines and rules instead of generic advice.
 - **A test-and-fix loop** retries the refactor when sandbox tests fail, up to a fixed limit, instead of returning one unchecked suggestion.
-- **Server-Sent Events** push each agent step (and model tokens) to the UI as they happen.
+- **Server-Sent Events** push each agent step and **Groq tokens live** (security + refactor) to the UI as they happen.
 - **Human-in-the-loop** stops the graph before a pull request is created until you approve it.
 
 ## Plan
@@ -51,4 +51,4 @@ Build in this order so each piece can be tested before the next one is added.
 3. **React UI** — done (form, SSE hook, Monaco diff, sidebar).
 4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`).
 
-Stack: Python, FastAPI, LangGraph, Qdrant + FastEmbed for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and runs tests in a temp folder. Optional next: token SSE, LangGraph interrupt-before-PR, Docker sandbox.
+Stack: Python, FastAPI, LangGraph, Qdrant + FastEmbed for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and streams LLM tokens over SSE. Optional next: LangGraph interrupt-before-PR, Docker sandbox.
