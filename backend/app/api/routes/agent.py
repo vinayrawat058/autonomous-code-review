@@ -1,7 +1,7 @@
 """
 Agent HTTP routes.
 
-POST /api/agent/stream  — SSE stream of LangGraph node updates
+POST /api/agent/stream  — SSE stream of LangGraph node updates + live LLM tokens
 POST /api/agent/approve — human gate: create a GitHub PR from the rewrite
 """
 
@@ -56,8 +56,44 @@ def _default_file_path(diff_text: str, fallback: str) -> str:
     return paths[0] if paths else fallback
 
 
+def _sse_from_custom(chunk: Any) -> dict[str, str] | None:
+    """Map LangGraph custom writer payloads to SSE event dicts."""
+    if not isinstance(chunk, dict):
+        return None
+    kind = str(chunk.get("type") or "")
+    if kind == "token":
+        return {
+            "event": "token",
+            "data": json.dumps(
+                {
+                    "node": chunk.get("node") or "llm",
+                    "token": chunk.get("token") or "",
+                }
+            ),
+        }
+    if kind == "llm_start":
+        return {
+            "event": "llm_start",
+            "data": json.dumps({"node": chunk.get("node") or "llm"}),
+        }
+    if kind == "llm_end":
+        return {
+            "event": "llm_end",
+            "data": json.dumps(
+                {
+                    "node": chunk.get("node") or "llm",
+                    "text": chunk.get("text") or "",
+                }
+            ),
+        }
+    return {
+        "event": "custom",
+        "data": json.dumps(chunk),
+    }
+
+
 def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
-    """Yield SSE event dicts while the LangGraph review runs."""
+    """Yield SSE event dicts while the LangGraph review runs (nodes + tokens)."""
     inputs: dict[str, Any] = {
         "diff": payload.diff_text,
         "iteration": 0,
@@ -73,13 +109,27 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
     }
 
     try:
-        for update in workflow.stream(inputs, config=config, stream_mode="updates"):
-            for node_name, node_update in update.items():
-                final.update(node_update)
-                yield {
-                    "event": "node",
-                    "data": json.dumps(_public_update(node_name, node_update)),
-                }
+        for mode, chunk in workflow.stream(
+            inputs,
+            config=config,
+            stream_mode=["updates", "custom"],
+        ):
+            if mode == "custom":
+                event = _sse_from_custom(chunk)
+                if event is not None:
+                    yield event
+                continue
+
+            if mode != "updates" or not isinstance(chunk, dict):
+                continue
+
+            for node_name, node_update in chunk.items():
+                if isinstance(node_update, dict):
+                    final.update(node_update)
+                    yield {
+                        "event": "node",
+                        "data": json.dumps(_public_update(node_name, node_update)),
+                    }
     except Exception as exc:  # noqa: BLE001 — surface the failure as an SSE event
         yield {
             "event": "error",
@@ -118,7 +168,7 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
 
 @router.post("/stream")
 async def stream_agent(payload: PRPayload):
-    """Run the review graph and push each node update over Server-Sent Events."""
+    """Run the review graph and push each node update + LLM token over SSE."""
     return EventSourceResponse(_run_review(payload))
 
 

@@ -42,7 +42,7 @@ Previous test failures:
 Change to fix:
 {diff}
 """
-    return complete(prompt)
+    return complete(prompt, node="refactor")
 
 
 def refactor_code(

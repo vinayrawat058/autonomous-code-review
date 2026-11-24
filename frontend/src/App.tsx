@@ -8,6 +8,7 @@ import { ApprovalModal } from "./components/ApprovalModal";
 import { DiffViewer } from "./components/DiffViewer";
 import { GraphSidebar } from "./components/GraphSidebar";
 import { ReviewForm } from "./components/ReviewForm";
+import { TokenStream } from "./components/TokenStream";
 import { useAgentStream } from "./hooks/useAgentStream";
 
 export default function App() {
@@ -21,6 +22,8 @@ export default function App() {
     running,
     done,
     error,
+    tokenNode,
+    liveTokens,
     reset,
     startReview,
   } = useAgentStream();
@@ -69,7 +72,10 @@ export default function App() {
       </header>
 
       <main className="grid gap-4 p-6 lg:grid-cols-[280px_1fr]">
-        <GraphSidebar nodes={nodes} nodeStatus={nodeStatus} />
+        <div className="grid gap-4 self-start">
+          <GraphSidebar nodes={nodes} nodeStatus={nodeStatus} />
+          <TokenStream node={tokenNode} text={liveTokens} running={running} />
+        </div>
         <div className="grid gap-4">
           <ReviewForm running={running} onSubmit={handleSubmit} />
           {error && (

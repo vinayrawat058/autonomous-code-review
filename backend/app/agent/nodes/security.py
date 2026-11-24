@@ -41,7 +41,7 @@ If the change breaks a rule, reply with one finding per line in this form:
 RULE | short quote from the rulebook | what is wrong in the change
 If nothing in the rulebook applies, reply with exactly: NONE
 """
-    return complete(prompt)
+    return complete(prompt, node="security")
 
 
 def security_audit(
