@@ -1,12 +1,12 @@
 """
-Create a GitHub branch + file commit + pull request for an approved rewrite.
+Create a GitHub branch + commit + pull request for an approved rewrite.
 
-Uses the GitHub REST API (no local git clone). Requires GITHUB_TOKEN with repo scope.
+Supports one or many files in a single commit (Git Data API).
+Requires GITHUB_TOKEN with repo scope for a real PR.
 """
 
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
 
 import httpx
@@ -22,6 +22,7 @@ class PullRequestResult:
     branch: str
     number: int | None
     dry_run: bool = False
+    files: list[str] | None = None
 
 
 def _headers() -> dict[str, str]:
@@ -38,19 +39,33 @@ def create_pull_request(
     repo: str,
     base_branch: str,
     branch_name: str,
-    file_path: str,
-    file_content: str,
+    files: dict[str, str] | None = None,
+    file_path: str | None = None,
+    file_content: str | None = None,
     title: str,
     body: str,
 ) -> PullRequestResult:
-    """Open a PR that adds/updates file_path with file_content on a new branch."""
+    """
+    Open a PR that writes one or more files on a new branch.
+
+    Prefer `files={path: content, ...}`. The older file_path/file_content
+    pair still works for a single-file PR.
+    """
+    file_map = dict(files or {})
+    if not file_map and file_path and file_content is not None:
+        file_map = {file_path: file_content}
+    if not file_map:
+        raise ValueError("No files to commit into the pull request.")
+
+    paths = sorted(file_map.keys())
+
     if not settings.github_token:
-        # Local demo without a token — still returns a clear result for the UI.
         return PullRequestResult(
             url=f"https://github.com/{owner}/{repo}/compare/{base_branch}...{branch_name}?expand=1",
             branch=branch_name,
             number=None,
             dry_run=True,
+            files=paths,
         )
 
     headers = _headers()
@@ -61,40 +76,58 @@ def create_pull_request(
         ref.raise_for_status()
         base_sha = ref.json()["object"]["sha"]
 
+        base_commit = client.get(f"{API}/repos/{owner}/{repo}/git/commits/{base_sha}")
+        base_commit.raise_for_status()
+        base_tree_sha = base_commit.json()["tree"]["sha"]
+
         create_ref = client.post(
             f"{API}/repos/{owner}/{repo}/git/refs",
             json={"ref": f"refs/heads/{branch_name}", "sha": base_sha},
         )
         if create_ref.status_code == 422:
-            # Branch may already exist from a prior approve — reuse it.
+            # Branch may already exist from a prior approve — point a new commit at it.
             pass
         else:
             create_ref.raise_for_status()
 
-        existing_sha: str | None = None
-        existing = client.get(
-            f"{API}/repos/{owner}/{repo}/contents/{file_path}",
-            params={"ref": branch_name},
-        )
-        if existing.status_code == 200:
-            existing_sha = existing.json().get("sha")
-        elif existing.status_code != 404:
-            existing.raise_for_status()
+        tree_items: list[dict] = []
+        for path, content in file_map.items():
+            blob = client.post(
+                f"{API}/repos/{owner}/{repo}/git/blobs",
+                json={"content": content, "encoding": "utf-8"},
+            )
+            blob.raise_for_status()
+            tree_items.append(
+                {
+                    "path": path,
+                    "mode": "100644",
+                    "type": "blob",
+                    "sha": blob.json()["sha"],
+                }
+            )
 
-        encoded = base64.b64encode(file_content.encode("utf-8")).decode("ascii")
-        put_body: dict = {
-            "message": title,
-            "content": encoded,
-            "branch": branch_name,
-        }
-        if existing_sha:
-            put_body["sha"] = existing_sha
-
-        put = client.put(
-            f"{API}/repos/{owner}/{repo}/contents/{file_path}",
-            json=put_body,
+        tree = client.post(
+            f"{API}/repos/{owner}/{repo}/git/trees",
+            json={"base_tree": base_tree_sha, "tree": tree_items},
         )
-        put.raise_for_status()
+        tree.raise_for_status()
+
+        commit = client.post(
+            f"{API}/repos/{owner}/{repo}/git/commits",
+            json={
+                "message": title,
+                "tree": tree.json()["sha"],
+                "parents": [base_sha],
+            },
+        )
+        commit.raise_for_status()
+        commit_sha = commit.json()["sha"]
+
+        update_ref = client.patch(
+            f"{API}/repos/{owner}/{repo}/git/refs/heads/{branch_name}",
+            json={"sha": commit_sha, "force": True},
+        )
+        update_ref.raise_for_status()
 
         pr = client.post(
             f"{API}/repos/{owner}/{repo}/pulls",
@@ -106,12 +139,12 @@ def create_pull_request(
             },
         )
         if pr.status_code == 422:
-            # PR may already exist for this head — return the compare URL.
             return PullRequestResult(
                 url=f"https://github.com/{owner}/{repo}/compare/{base_branch}...{branch_name}?expand=1",
                 branch=branch_name,
                 number=None,
                 dry_run=False,
+                files=paths,
             )
         pr.raise_for_status()
         data = pr.json()
@@ -120,4 +153,5 @@ def create_pull_request(
             branch=branch_name,
             number=data.get("number"),
             dry_run=False,
+            files=paths,
         )

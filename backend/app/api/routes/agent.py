@@ -15,7 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import workflow
 from app.models.schemas import ApprovePayload, ApproveResponse, PRPayload
-from app.rag.diff_parse import changed_paths
+from app.rag.diff_parse import changed_paths, files_for_pull_request
 from app.services.github_pr import create_pull_request
 from app.services.review_store import StoredReview, review_store
 
@@ -109,6 +109,8 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
                 "test_errors": final.get("test_errors") or [],
                 "iteration": final.get("iteration") or 0,
                 "suggested_file_path": _default_file_path(payload.diff_text, "app.py"),
+                "suggested_file_paths": changed_paths(payload.diff_text)
+                or [_default_file_path(payload.diff_text, "app.py")],
             }
         ),
     }
@@ -129,16 +131,26 @@ async def approve_agent(payload: ApprovePayload):
             status_code=404,
             detail="No finished review for this thread_id. Run /stream first.",
         )
-    if not (stored.refactored_code or "").strip():
+    if not (stored.refactored_code or "").strip() and not (stored.diff_text or "").strip():
         raise HTTPException(status_code=400, detail="Review has no rewritten code to commit.")
 
-    file_path = payload.file_path or _default_file_path(stored.diff_text, "app.py")
+    primary = payload.file_path or _default_file_path(stored.diff_text, "app.py")
+    file_map = files_for_pull_request(
+        stored.diff_text,
+        stored.refactored_code,
+        primary_path=primary,
+    )
+    if not file_map:
+        raise HTTPException(status_code=400, detail="Could not build any files from the review diff.")
+
     title = payload.title or "Agentic PR Review Studio: security fix"
     findings_block = "\n".join(f"- {item}" for item in stored.findings) or "- (none)"
+    files_block = "\n".join(f"- `{path}`" for path in sorted(file_map))
     body = payload.body or (
         "## Summary\n"
         "Approved rewrite from Agentic PR Review Studio.\n\n"
         f"## Findings\n{findings_block}\n\n"
+        f"## Files\n{files_block}\n\n"
         f"Iterations: {stored.iteration}\n"
     )
     branch = _branch_name(payload.thread_id)
@@ -149,18 +161,18 @@ async def approve_agent(payload: ApprovePayload):
             repo=payload.repo,
             base_branch=payload.base_branch,
             branch_name=branch,
-            file_path=file_path,
-            file_content=stored.refactored_code,
+            files=file_map,
             title=title,
             body=body,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"GitHub PR failed: {exc}") from exc
 
+    written = result.files or sorted(file_map.keys())
     message = (
         "Dry run — set GITHUB_TOKEN in backend/.env to open a real pull request."
         if result.dry_run
-        else "Pull request created."
+        else f"Pull request created with {len(written)} file(s)."
     )
     return ApproveResponse(
         status="ok",
@@ -170,4 +182,5 @@ async def approve_agent(payload: ApprovePayload):
         number=result.number,
         dry_run=result.dry_run,
         message=message,
+        files_written=written,
     )

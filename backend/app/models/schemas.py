@@ -37,9 +37,12 @@ class ApprovePayload(BaseModel):
     owner: str = Field(..., description="GitHub repo owner, e.g. vinayrawat058.")
     repo: str = Field(..., description="GitHub repo name, e.g. autonomous-code-review.")
     base_branch: str = Field(default="main", description="Branch to open the PR against.")
-    file_path: str = Field(
-        default="app.py",
-        description="Path in the repo to write the rewritten code to.",
+    file_path: str | None = Field(
+        default=None,
+        description=(
+            "Optional primary path for the rewrite overlay. "
+            "When the stored diff touches multiple files, all of them are written."
+        ),
     )
     title: str | None = Field(
         default=None,
@@ -59,3 +62,4 @@ class ApproveResponse(BaseModel):
     number: int | None = None
     dry_run: bool = False
     message: str = ""
+    files_written: list[str] = Field(default_factory=list)
