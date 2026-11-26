@@ -17,6 +17,9 @@ class GraphState(TypedDict, total=False):
     repo_path: str | None
     test_code: str
     thread_id: str
+    diff_kind: str  # unified | synthetic
+    changed_files: list[str]
+    ingest_warnings: list[str]
 
     # RAG context
     code_context: str

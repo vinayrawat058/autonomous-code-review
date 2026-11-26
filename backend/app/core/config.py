@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # How long a paused review may wait for Approve/Reject (seconds)
     approve_ttl_seconds: int = 3600
 
+    # Ingest limits for pasted diffs / plain code
+    max_diff_chars: int = 200_000
+    max_diff_files: int = 40
+
     # GitHub PR creation on approve (optional — without a token, approve is a dry run)
     github_token: str = ""
     github_default_owner: str = ""
