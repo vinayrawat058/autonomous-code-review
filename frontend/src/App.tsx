@@ -36,6 +36,7 @@ export default function App() {
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
 
   async function handleSubmit(input: {
     diff_text: string;
@@ -45,6 +46,7 @@ export default function App() {
     setDecision(null);
     setPrUrl(null);
     setModalOpen(false);
+    setAwaitingApproval(false);
     setOriginalDiff(input.diff_text);
     const id = crypto.randomUUID();
     setThreadId(id);
@@ -57,7 +59,19 @@ export default function App() {
     if (result?.suggested_file_path) {
       setSuggestedFilePath(result.suggested_file_path);
     }
-    setModalOpen(true);
+    const paused = Boolean(result?.awaiting_approval);
+    setAwaitingApproval(paused);
+    if (!result) {
+      return;
+    }
+    if (result.can_approve === false) {
+      setDecision(
+        "Review paused, but no files could be built from this diff/rewrite — Reject or paste a fuller change.",
+      );
+      setModalOpen(paused);
+      return;
+    }
+    setModalOpen(paused);
   }
 
   return (
@@ -74,7 +88,11 @@ export default function App() {
 
       <main className="grid gap-4 p-6 lg:grid-cols-[280px_1fr]">
         <div className="grid gap-4 self-start">
-          <GraphSidebar nodes={nodes} nodeStatus={nodeStatus} />
+          <GraphSidebar
+            nodes={nodes}
+            nodeStatus={nodeStatus}
+            awaitingApproval={awaitingApproval && done && !running}
+          />
           <TokenStream node={tokenNode} text={liveTokens} running={running} />
         </div>
         <div className="grid gap-4">
@@ -130,6 +148,7 @@ export default function App() {
               force: input.force,
             });
             markCreatePr("passed");
+            setAwaitingApproval(false);
             setPrUrl(result.pr_url);
             setDecision(
               result.dry_run
@@ -157,6 +176,7 @@ export default function App() {
           setDecision("Rejected — paused graph thread cleared.");
           setPrUrl(null);
           setModalOpen(false);
+          setAwaitingApproval(false);
           reset();
           setOriginalDiff("");
           setThreadId("");

@@ -8,6 +8,7 @@ POST /api/agent/reject  — cancel a paused graph thread
 
 import json
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 
@@ -15,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import workflow
+from app.core.config import settings
 from app.models.schemas import (
     ApprovePayload,
     ApproveResponse,
@@ -22,7 +24,7 @@ from app.models.schemas import (
     RejectPayload,
     RejectResponse,
 )
-from app.rag.diff_parse import changed_paths
+from app.rag.diff_parse import changed_paths, files_for_pull_request
 from app.services.review_store import StoredReview, review_store
 
 router = APIRouter()
@@ -58,6 +60,32 @@ def _public_update(node_name: str, update: dict[str, Any]) -> dict[str, Any]:
 def _default_file_path(diff_text: str, fallback: str) -> str:
     paths = changed_paths(diff_text)
     return paths[0] if paths else fallback
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_iso(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _pause_expiry(paused_at: str | None) -> tuple[bool, str | None]:
+    """Return (expired?, expires_at ISO) for a paused review."""
+    if not paused_at:
+        return False, None
+    started = _parse_iso(paused_at)
+    if started is None:
+        return False, None
+    expires = started.timestamp() + max(1, int(settings.approve_ttl_seconds))
+    expires_at = datetime.fromtimestamp(expires, tz=timezone.utc).isoformat()
+    return _utc_now().timestamp() >= expires, expires_at
 
 
 def _sse_from_custom(chunk: Any) -> dict[str, str] | None:
@@ -117,6 +145,8 @@ def _consume_stream(
             continue
 
         for node_name, node_update in chunk.items():
+            if node_name == "__interrupt__":
+                continue
             if isinstance(node_update, dict):
                 final.update(node_update)
                 yield {
@@ -145,6 +175,12 @@ def _thread_lock(thread_id: str) -> Lock:
             lock = Lock()
             _approve_locks[thread_id] = lock
         return lock
+
+
+def _can_build_pr_files(diff_text: str, refactored_code: str) -> bool:
+    primary = _default_file_path(diff_text, "app.py")
+    files = files_for_pull_request(diff_text, refactored_code, primary_path=primary)
+    return bool(files)
 
 
 def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
@@ -190,10 +226,19 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
     )
 
     paused = _awaiting_create_pr(config)
+    paused_at = ""
+    expires_at = None
+    if paused:
+        paused_at = _utc_now().isoformat()
+        workflow.update_state(config, {"paused_at": paused_at})
+        _, expires_at = _pause_expiry(paused_at)
+
+    refactored = str(final.get("refactored_code") or "")
+    can_approve = _can_build_pr_files(payload.diff_text, refactored)
     done_payload = {
         "thread_id": payload.thread_id,
         "findings": final.get("findings") or [],
-        "refactored_code": final.get("refactored_code") or "",
+        "refactored_code": refactored,
         "test_errors": final.get("test_errors") or [],
         "iteration": final.get("iteration") or 0,
         "suggested_file_path": _default_file_path(payload.diff_text, "app.py"),
@@ -201,6 +246,10 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
         or [_default_file_path(payload.diff_text, "app.py")],
         "awaiting_approval": paused,
         "next_node": "create_pr" if paused else None,
+        "can_approve": can_approve,
+        "paused_at": paused_at or None,
+        "expires_at": expires_at,
+        "approve_ttl_seconds": settings.approve_ttl_seconds,
     }
 
     if paused:
@@ -211,6 +260,8 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
                     "thread_id": payload.thread_id,
                     "next_node": "create_pr",
                     "message": "Paused before create_pr — approve to resume the graph.",
+                    "expires_at": expires_at,
+                    "can_approve": can_approve,
                 }
             ),
         }
@@ -224,6 +275,11 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
 @router.post("/stream")
 async def stream_agent(payload: PRPayload):
     """Run the review graph until interrupt_before=['create_pr']."""
+    if not (payload.diff_text or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="diff_text is empty — paste a unified diff or code change before streaming.",
+        )
     return EventSourceResponse(_run_review(payload))
 
 
@@ -234,7 +290,7 @@ async def approve_agent(payload: ApprovePayload):
     if not lock.acquire(blocking=False):
         raise HTTPException(
             status_code=409,
-            detail="Approve already in progress for this thread_id.",
+            detail="Approve/reject already in progress for this thread_id.",
         )
 
     try:
@@ -271,8 +327,33 @@ def _approve_locked(payload: ApprovePayload) -> ApproveResponse:
 
     snapshot = workflow.get_state(config)
     values = dict(snapshot.values or {})
+
+    expired, expires_at = _pause_expiry(values.get("paused_at"))
+    if expired:
+        _clear_thread(payload.thread_id)
+        raise HTTPException(
+            status_code=410,
+            detail=(
+                "This paused review expired"
+                + (f" at {expires_at}" if expires_at else "")
+                + ". Re-run /stream to review again."
+            ),
+        )
+
     if not (values.get("refactored_code") or "").strip() and not (values.get("diff") or "").strip():
         raise HTTPException(status_code=400, detail="Review has no rewritten code to commit.")
+
+    if not _can_build_pr_files(
+        str(values.get("diff") or ""),
+        str(values.get("refactored_code") or ""),
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not build any files from this review "
+                "(empty or unparseable diff and no rewrite)."
+            ),
+        )
 
     test_errors = list(values.get("test_errors") or [])
     if test_errors and not payload.force:
@@ -339,6 +420,19 @@ def _approve_locked(payload: ApprovePayload) -> ApproveResponse:
 @router.post("/reject", response_model=RejectResponse)
 async def reject_agent(payload: RejectPayload):
     """Cancel a paused review: drop checkpoint so create_pr cannot be resumed."""
+    lock = _thread_lock(payload.thread_id)
+    if not lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="Approve/reject already in progress for this thread_id.",
+        )
+    try:
+        return _reject_locked(payload)
+    finally:
+        lock.release()
+
+
+def _reject_locked(payload: RejectPayload) -> RejectResponse:
     config = {"configurable": {"thread_id": payload.thread_id}}
     paused = _awaiting_create_pr(config)
     stored = review_store.get(payload.thread_id) is not None
@@ -351,9 +445,15 @@ async def reject_agent(payload: RejectPayload):
             detail="No review found for this thread_id to reject.",
         )
 
+    expired, _ = _pause_expiry(values.get("paused_at"))
     _clear_thread(payload.thread_id)
+    message = (
+        "Expired paused review discarded — graph thread cleared."
+        if expired
+        else "Paused review discarded — graph thread cleared."
+    )
     return RejectResponse(
         status="rejected",
         thread_id=payload.thread_id,
-        message="Paused review discarded — graph thread cleared.",
+        message=message,
     )

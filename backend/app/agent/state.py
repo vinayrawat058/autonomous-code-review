@@ -32,6 +32,7 @@ class GraphState(TypedDict, total=False):
 
     # Human gate + PR (filled on approve, consumed by create_pr)
     approved: bool
+    paused_at: str  # ISO-8601 UTC when interrupt_before fired
     pr_owner: str
     pr_repo: str
     pr_base_branch: str

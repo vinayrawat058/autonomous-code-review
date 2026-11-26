@@ -153,3 +153,65 @@ def test_restream_same_thread_id_resets_checkpoint(monkeypatch):
         },
     )
     assert ok.status_code == 200
+
+
+def test_empty_diff_rejected_before_stream():
+    response = client.post(
+        "/api/agent/stream",
+        json={"thread_id": "edge-empty", "diff_text": "   ", "test_code": ""},
+    )
+    assert response.status_code == 400
+    assert "empty" in response.json()["detail"].lower()
+
+
+def test_approve_expires_after_ttl(monkeypatch):
+    monkeypatch.setattr("app.services.github_pr.settings.github_token", "")
+    monkeypatch.setattr("app.api.routes.agent.settings.approve_ttl_seconds", 1)
+    from app.agent.graph import workflow
+
+    _stream("edge-expire")
+    config = {"configurable": {"thread_id": "edge-expire"}}
+    workflow.update_state(config, {"paused_at": "2000-01-01T00:00:00+00:00"})
+
+    expired = client.post(
+        "/api/agent/approve",
+        json={
+            "thread_id": "edge-expire",
+            "owner": "vinayrawat058",
+            "repo": "autonomous-code-review",
+            "file_path": "app.py",
+        },
+    )
+    assert expired.status_code == 410
+    assert "expired" in expired.json()["detail"].lower()
+
+
+def test_done_event_includes_can_approve_and_expiry():
+    events = _stream("edge-meta")
+    done = next(payload for name, payload in events if name == "done")
+    assert done["awaiting_approval"] is True
+    assert done["can_approve"] is True
+    assert done["paused_at"]
+    assert done["expires_at"]
+    assert done["approve_ttl_seconds"] >= 1
+
+
+def test_unparseable_diff_without_rewrite_cannot_approve(monkeypatch):
+    monkeypatch.setattr("app.services.github_pr.settings.github_token", "")
+    from app.agent.graph import workflow
+
+    _stream("edge-nofiles", diff_text="not a real diff at all")
+    config = {"configurable": {"thread_id": "edge-nofiles"}}
+    # Clear rewrite so files_for_pull_request has nothing useful.
+    workflow.update_state(config, {"refactored_code": "", "diff": "???"})
+
+    blocked = client.post(
+        "/api/agent/approve",
+        json={
+            "thread_id": "edge-nofiles",
+            "owner": "vinayrawat058",
+            "repo": "autonomous-code-review",
+        },
+    )
+    assert blocked.status_code == 400
+    assert "files" in blocked.json()["detail"].lower()

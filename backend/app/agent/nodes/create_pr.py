@@ -36,8 +36,15 @@ def create_pull_request_node(state: GraphState) -> dict:
             "files_written": [],
         }
 
-    diff_text = state.get("diff") or ""
-    refactored = state.get("refactored_code") or ""
+    diff_text = (state.get("diff") or "").strip()
+    refactored = (state.get("refactored_code") or "").strip()
+    if not diff_text and not refactored:
+        return {
+            "pr_error": "Empty review — no diff or rewritten code to commit.",
+            "pr_url": "",
+            "files_written": [],
+        }
+
     file_map = files_for_pull_request(
         diff_text,
         refactored,
@@ -45,7 +52,10 @@ def create_pull_request_node(state: GraphState) -> dict:
     )
     if not file_map:
         return {
-            "pr_error": "Could not build any files from the review diff.",
+            "pr_error": (
+                "Could not build any files from the review "
+                "(unparseable diff and no plain rewrite to fall back on)."
+            ),
             "pr_url": "",
             "files_written": [],
         }

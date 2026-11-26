@@ -7,18 +7,19 @@ Wires nodes + edges into the state machine from the PDF:
          → ExecuteSandboxTests ──(fail, iteration < 3)──► RefactorCode
                               └──(pass)──► interrupt_before → CreatePullRequest
 
-A MemorySaver checkpointer keeps state so /approve can resume after the pause.
+A durable (Sqlite) checkpointer keeps paused state so /approve can resume
+after an API restart.
 """
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from app.agent.checkpointer import make_checkpointer
 from app.agent.nodes import create_pr, execute_sandbox, ingest, refactor, retrieve, security
 from app.agent.state import GraphState
 from app.core.config import settings
 
 # Shared across stream + approve in this process.
-_checkpointer = MemorySaver()
+_checkpointer = make_checkpointer()
 
 
 def _should_retry(state: GraphState) -> str:

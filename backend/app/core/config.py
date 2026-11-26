@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     # LangGraph retry loop max (PDF: 3)
     max_refactor_iterations: int = 3
 
+    # Checkpoint persistence for interrupt_before resume (sqlite survives API restart)
+    checkpoint_backend: str = "sqlite"  # sqlite | memory
+    checkpoint_sqlite_path: str = ".checkpoints/langgraph.sqlite"
+
+    # How long a paused review may wait for Approve/Reject (seconds)
+    approve_ttl_seconds: int = 3600
+
     # GitHub PR creation on approve (optional — without a token, approve is a dry run)
     github_token: str = ""
     github_default_owner: str = ""

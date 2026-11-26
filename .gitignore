@@ -21,6 +21,7 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Local data / vectors
+# Local data / vectors / checkpoints
 backend/.qdrant/
+backend/.checkpoints/
 *.sqlite

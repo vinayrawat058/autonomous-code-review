@@ -49,6 +49,10 @@ export interface DoneEventData {
   suggested_file_paths?: string[];
   awaiting_approval?: boolean;
   next_node?: string | null;
+  can_approve?: boolean;
+  paused_at?: string | null;
+  expires_at?: string | null;
+  approve_ttl_seconds?: number;
 }
 
 export interface InterruptEventData {
