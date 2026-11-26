@@ -20,6 +20,7 @@ type Props = {
     base_branch: string;
     file_path: string;
     title: string;
+    force: boolean;
   }) => void;
   onReject: () => void;
 };
@@ -41,12 +42,14 @@ export function ApprovalModal({
   const [baseBranch, setBaseBranch] = useState("main");
   const [filePath, setFilePath] = useState(defaultFilePath);
   const [title, setTitle] = useState("Agentic PR Review Studio: security fix");
+  const [force, setForce] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setOwner(defaultOwner);
     setRepo(defaultRepo);
     setFilePath(defaultFilePath);
+    setForce(false);
   }, [open, defaultOwner, defaultRepo, defaultFilePath]);
 
   if (!open) return null;
@@ -86,6 +89,18 @@ export function ApprovalModal({
             <pre className="mt-2 max-h-40 overflow-auto rounded border border-zinc-800 bg-zinc-950 p-3 text-xs text-rose-200">
               {testErrors.join("\n")}
             </pre>
+            <label className="mt-3 flex items-start gap-2 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={force}
+                onChange={(e) => setForce(e.target.checked)}
+              />
+              <span>
+                Force open PR anyway (sandbox still failing). Rejected by
+                default until you check this.
+              </span>
+            </label>
           </div>
         )}
 
@@ -137,7 +152,13 @@ export function ApprovalModal({
         <div className="mt-6 flex gap-3">
           <button
             type="button"
-            disabled={approving || !owner.trim() || !repo.trim() || !filePath.trim()}
+            disabled={
+              approving ||
+              !owner.trim() ||
+              !repo.trim() ||
+              !filePath.trim() ||
+              (testErrors.length > 0 && !force)
+            }
             onClick={() =>
               onApprove({
                 owner: owner.trim(),
@@ -145,6 +166,7 @@ export function ApprovalModal({
                 base_branch: baseBranch.trim() || "main",
                 file_path: filePath.trim(),
                 title: title.trim() || "Agentic PR Review Studio: security fix",
+                force,
               })
             }
             className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-700"

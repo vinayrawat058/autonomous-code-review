@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { approveReview } from "./api/approve";
+import { approveReview, rejectReview } from "./api/approve";
 import { ApprovalModal } from "./components/ApprovalModal";
 import { DiffViewer } from "./components/DiffViewer";
 import { GraphSidebar } from "./components/GraphSidebar";
@@ -26,6 +26,7 @@ export default function App() {
     liveTokens,
     reset,
     startReview,
+    markCreatePr,
   } = useAgentStream();
 
   const [originalDiff, setOriginalDiff] = useState("");
@@ -35,6 +36,7 @@ export default function App() {
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
 
   async function handleSubmit(input: {
     diff_text: string;
@@ -44,6 +46,7 @@ export default function App() {
     setDecision(null);
     setPrUrl(null);
     setModalOpen(false);
+    setAwaitingApproval(false);
     setOriginalDiff(input.diff_text);
     const id = crypto.randomUUID();
     setThreadId(id);
@@ -56,7 +59,19 @@ export default function App() {
     if (result?.suggested_file_path) {
       setSuggestedFilePath(result.suggested_file_path);
     }
-    setModalOpen(true);
+    const paused = Boolean(result?.awaiting_approval);
+    setAwaitingApproval(paused);
+    if (!result) {
+      return;
+    }
+    if (result.can_approve === false) {
+      setDecision(
+        "Review paused, but no files could be built from this diff/rewrite — Reject or paste a fuller change.",
+      );
+      setModalOpen(paused);
+      return;
+    }
+    setModalOpen(paused);
   }
 
   return (
@@ -73,7 +88,11 @@ export default function App() {
 
       <main className="grid gap-4 p-6 lg:grid-cols-[280px_1fr]">
         <div className="grid gap-4 self-start">
-          <GraphSidebar nodes={nodes} nodeStatus={nodeStatus} />
+          <GraphSidebar
+            nodes={nodes}
+            nodeStatus={nodeStatus}
+            awaitingApproval={awaitingApproval && done && !running}
+          />
           <TokenStream node={tokenNode} text={liveTokens} running={running} />
         </div>
         <div className="grid gap-4">
@@ -117,6 +136,7 @@ export default function App() {
         onApprove={async (input) => {
           if (!threadId) return;
           setApproving(true);
+          markCreatePr("running");
           try {
             const result = await approveReview({
               thread_id: threadId,
@@ -125,7 +145,10 @@ export default function App() {
               base_branch: input.base_branch,
               file_path: input.file_path,
               title: input.title,
+              force: input.force,
             });
+            markCreatePr("passed");
+            setAwaitingApproval(false);
             setPrUrl(result.pr_url);
             setDecision(
               result.dry_run
@@ -134,6 +157,7 @@ export default function App() {
             );
             setModalOpen(false);
           } catch (err) {
+            markCreatePr("failed");
             setDecision(
               err instanceof Error ? err.message : "Failed to open pull request.",
             );
@@ -141,10 +165,18 @@ export default function App() {
             setApproving(false);
           }
         }}
-        onReject={() => {
-          setDecision("Rejected — rewrite discarded from this session.");
+        onReject={async () => {
+          if (threadId) {
+            try {
+              await rejectReview(threadId);
+            } catch {
+              // Still clear the local session even if the thread was already gone.
+            }
+          }
+          setDecision("Rejected — paused graph thread cleared.");
           setPrUrl(null);
           setModalOpen(false);
+          setAwaitingApproval(false);
           reset();
           setOriginalDiff("");
           setThreadId("");

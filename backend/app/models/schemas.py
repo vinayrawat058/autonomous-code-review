@@ -52,6 +52,22 @@ class ApprovePayload(BaseModel):
         default=None,
         description="Optional PR body. Defaults to findings from the review.",
     )
+    force: bool = Field(
+        default=False,
+        description="If true, allow opening a PR even when sandbox test_errors remain.",
+    )
+
+
+class RejectPayload(BaseModel):
+    """Body for POST /api/agent/reject — cancel a paused review thread."""
+
+    thread_id: str = Field(..., description="Same id used when the review was streamed.")
+
+
+class RejectResponse(BaseModel):
+    status: str
+    thread_id: str
+    message: str = ""
 
 
 class ApproveResponse(BaseModel):

@@ -1,5 +1,6 @@
 /**
- * POST /api/agent/approve — open a GitHub PR after the human clicks Approve.
+ * POST /api/agent/approve — resume LangGraph create_pr after human approval.
+ * POST /api/agent/reject  — cancel a paused graph thread.
  */
 
 export type ApproveRequest = {
@@ -10,6 +11,7 @@ export type ApproveRequest = {
   file_path: string;
   title?: string;
   body?: string;
+  force?: boolean;
 };
 
 export type ApproveResponse = {
@@ -19,6 +21,13 @@ export type ApproveResponse = {
   branch: string;
   number: number | null;
   dry_run: boolean;
+  message: string;
+  files_written?: string[];
+};
+
+export type RejectResponse = {
+  status: string;
+  thread_id: string;
   message: string;
 };
 
@@ -41,4 +50,21 @@ export async function approveReview(
     throw new Error(detail);
   }
   return data as ApproveResponse;
+}
+
+export async function rejectReview(threadId: string): Promise<RejectResponse> {
+  const response = await fetch(`${baseUrl()}/api/agent/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thread_id: threadId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail =
+      typeof data?.detail === "string"
+        ? data.detail
+        : `Reject failed (${response.status})`;
+    throw new Error(detail);
+  }
+  return data as RejectResponse;
 }

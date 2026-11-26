@@ -57,7 +57,7 @@ def test_graph_retries_until_the_rewrite_passes():
     graph.add_conditional_edges(
         "sandbox",
         _should_retry,
-        {"refactor": "refactor", "done": END},
+        {"refactor": "refactor", "await_approval": END},
     )
     seen: list[str] = []
     for update in graph.compile().stream(

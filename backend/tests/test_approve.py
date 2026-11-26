@@ -1,15 +1,31 @@
-"""Approve stores a finished review and can dry-run a GitHub PR without a token."""
+"""Approve resumes a graph paused by interrupt_before=['create_pr']."""
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.review_store import StoredReview, review_store
+from app.services.review_store import review_store
 
 client = TestClient(app)
 
 
 def setup_function() -> None:
     review_store.clear()
+
+
+def _run_stream(thread_id: str, diff_text: str) -> None:
+    with client.stream(
+        "POST",
+        "/api/agent/stream",
+        json={
+            "thread_id": thread_id,
+            "diff_text": diff_text,
+            "test_code": "",
+        },
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+    assert "interrupt" in body
+    assert "awaiting_approval" in body
 
 
 def test_approve_without_review_returns_404():
@@ -25,16 +41,11 @@ def test_approve_without_review_returns_404():
     assert response.status_code == 404
 
 
-def test_approve_dry_run_returns_compare_url(monkeypatch):
+def test_approve_resumes_interrupt_and_dry_runs_pr(monkeypatch):
     monkeypatch.setattr("app.services.github_pr.settings.github_token", "")
-    review_store.save(
-        StoredReview(
-            thread_id="t-1",
-            diff_text="diff --git a/app.py b/app.py\n",
-            refactored_code='def login(user):\n    return "SELECT ?", (user,)\n',
-            findings=["A03 | injection"],
-            iteration=1,
-        )
+    _run_stream(
+        "t-1",
+        'diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1 @@\n-return user\n+return "SELECT ?", (user,)\n',
     )
     response = client.post(
         "/api/agent/approve",
@@ -52,7 +63,7 @@ def test_approve_dry_run_returns_compare_url(monkeypatch):
     assert body["dry_run"] is True
     assert body["branch"].startswith("agent-review/")
     assert "github.com/vinayrawat058/autonomous-code-review" in body["pr_url"]
-    assert body["files_written"] == ["app.py"]
+    assert "app.py" in body["files_written"]
 
 
 def test_approve_dry_run_writes_multiple_files(monkeypatch):
@@ -72,15 +83,7 @@ diff --git a/db.py b/db.py
  def run_query(sql, params=None):
 +    return {"sql": sql, "params": params}
 """
-    review_store.save(
-        StoredReview(
-            thread_id="t-multi",
-            diff_text=multi,
-            refactored_code="def login(user):\n    return run_query('SELECT 1', ())\n",
-            findings=["A03 | injection"],
-            iteration=1,
-        )
-    )
+    _run_stream("t-multi", multi)
     response = client.post(
         "/api/agent/approve",
         json={

@@ -8,7 +8,8 @@ export type NodeName =
   | "retrieve"
   | "security"
   | "refactor"
-  | "sandbox";
+  | "sandbox"
+  | "create_pr";
 
 export type NodeStatus = "idle" | "running" | "passed" | "failed";
 
@@ -46,4 +47,16 @@ export interface DoneEventData {
   iteration: number;
   suggested_file_path?: string;
   suggested_file_paths?: string[];
+  awaiting_approval?: boolean;
+  next_node?: string | null;
+  can_approve?: boolean;
+  paused_at?: string | null;
+  expires_at?: string | null;
+  approve_ttl_seconds?: number;
+}
+
+export interface InterruptEventData {
+  thread_id: string;
+  next_node: string;
+  message?: string;
 }

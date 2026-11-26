@@ -7,6 +7,7 @@
 
 import type {
   DoneEventData,
+  InterruptEventData,
   LlmEndEventData,
   LlmStartEventData,
   NodeEventData,
@@ -22,6 +23,7 @@ export type StreamHandlers = {
   onToken?: (data: TokenEventData) => void;
   onLlmStart?: (data: LlmStartEventData) => void;
   onLlmEnd?: (data: LlmEndEventData) => void;
+  onInterrupt?: (data: InterruptEventData) => void;
   onDone?: (data: DoneEventData) => void;
   onError?: (message: string) => void;
 };
@@ -62,6 +64,8 @@ function parseSseChunk(buffer: string, handlers: StreamHandlers): string {
       handlers.onLlmStart?.(payload as LlmStartEventData);
     } else if (eventName === "llm_end") {
       handlers.onLlmEnd?.(payload as LlmEndEventData);
+    } else if (eventName === "interrupt") {
+      handlers.onInterrupt?.(payload as InterruptEventData);
     } else if (eventName === "done") {
       handlers.onDone?.(payload as DoneEventData);
     } else if (eventName === "error") {
