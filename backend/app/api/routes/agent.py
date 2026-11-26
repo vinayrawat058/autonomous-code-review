@@ -3,21 +3,32 @@ Agent HTTP routes.
 
 POST /api/agent/stream  — SSE: run graph until interrupt_before create_pr
 POST /api/agent/approve — resume the paused graph so create_pr runs
+POST /api/agent/reject  — cancel a paused graph thread
 """
 
 import json
 from collections.abc import Iterator
+from threading import Lock
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import workflow
-from app.models.schemas import ApprovePayload, ApproveResponse, PRPayload
+from app.models.schemas import (
+    ApprovePayload,
+    ApproveResponse,
+    PRPayload,
+    RejectPayload,
+    RejectResponse,
+)
 from app.rag.diff_parse import changed_paths
 from app.services.review_store import StoredReview, review_store
 
 router = APIRouter()
+
+_approve_locks: dict[str, Lock] = {}
+_locks_guard = Lock()
 
 _LONG_FIELDS = {"code_context", "policy_context", "diff", "refactored_code", "test_code"}
 _PREVIEW = 400
@@ -120,8 +131,27 @@ def _awaiting_create_pr(config: dict[str, Any]) -> bool:
     return "create_pr" in next_nodes
 
 
+def _clear_thread(thread_id: str) -> None:
+    """Drop checkpoint + in-memory review so a thread can be restarted cleanly."""
+    if workflow.checkpointer is not None:
+        workflow.checkpointer.delete_thread(thread_id)
+    review_store.delete(thread_id)
+
+
+def _thread_lock(thread_id: str) -> Lock:
+    with _locks_guard:
+        lock = _approve_locks.get(thread_id)
+        if lock is None:
+            lock = Lock()
+            _approve_locks[thread_id] = lock
+        return lock
+
+
 def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
     """Yield SSE events until the graph pauses before create_pr."""
+    # Same thread_id reused → wipe prior checkpoint so history does not collide.
+    _clear_thread(payload.thread_id)
+
     inputs: dict[str, Any] = {
         "diff": payload.diff_text,
         "iteration": 0,
@@ -200,24 +230,42 @@ async def stream_agent(payload: PRPayload):
 @router.post("/approve", response_model=ApproveResponse)
 async def approve_agent(payload: ApprovePayload):
     """Resume the paused graph so the create_pr node can open the GitHub PR."""
+    lock = _thread_lock(payload.thread_id)
+    if not lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="Approve already in progress for this thread_id.",
+        )
+
+    try:
+        return _approve_locked(payload)
+    finally:
+        lock.release()
+
+
+def _approve_locked(payload: ApprovePayload) -> ApproveResponse:
     config = {"configurable": {"thread_id": payload.thread_id}}
 
     if not _awaiting_create_pr(config):
-        # Fallback: older path / tests that only seeded review_store.
-        stored = review_store.get(payload.thread_id)
-        if stored is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    "No paused review for this thread_id. "
-                    "Run /stream first and approve while the graph is interrupted."
-                ),
+        values = dict((workflow.get_state(config).values or {}))
+        existing_url = str(values.get("pr_url") or "")
+        if existing_url:
+            # Idempotent double-approve after a successful create_pr.
+            return ApproveResponse(
+                status="ok",
+                thread_id=payload.thread_id,
+                pr_url=existing_url,
+                branch=str(values.get("pr_branch") or ""),
+                number=values.get("pr_number"),
+                dry_run=bool(values.get("pr_dry_run", False)),
+                message="PR already created for this thread — returning the existing result.",
+                files_written=list(values.get("files_written") or []),
             )
         raise HTTPException(
-            status_code=409,
+            status_code=404,
             detail=(
-                "Graph is not paused before create_pr. "
-                "Re-run /stream so LangGraph can interrupt_before the PR node."
+                "No paused review for this thread_id. "
+                "Run /stream first and approve while the graph is interrupted."
             ),
         )
 
@@ -225,6 +273,16 @@ async def approve_agent(payload: ApprovePayload):
     values = dict(snapshot.values or {})
     if not (values.get("refactored_code") or "").strip() and not (values.get("diff") or "").strip():
         raise HTTPException(status_code=400, detail="Review has no rewritten code to commit.")
+
+    test_errors = list(values.get("test_errors") or [])
+    if test_errors and not payload.force:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Sandbox still has failing tests. "
+                "Pass force=true to open a PR anyway, or fix and re-run /stream."
+            ),
+        )
 
     workflow.update_state(
         config,
@@ -248,7 +306,6 @@ async def approve_agent(payload: ApprovePayload):
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"GitHub PR failed: {exc}") from exc
 
-    # Prefer values written by the create_pr node; fall back to latest checkpoint.
     state_after = workflow.get_state(config).values or {}
     pr_error = final.get("pr_error") or state_after.get("pr_error") or ""
     if pr_error:
@@ -276,4 +333,27 @@ async def approve_agent(payload: ApprovePayload):
         dry_run=dry_run,
         message=message,
         files_written=written,
+    )
+
+
+@router.post("/reject", response_model=RejectResponse)
+async def reject_agent(payload: RejectPayload):
+    """Cancel a paused review: drop checkpoint so create_pr cannot be resumed."""
+    config = {"configurable": {"thread_id": payload.thread_id}}
+    paused = _awaiting_create_pr(config)
+    stored = review_store.get(payload.thread_id) is not None
+    values = dict((workflow.get_state(config).values or {}))
+    has_state = bool(values)
+
+    if not paused and not stored and not has_state:
+        raise HTTPException(
+            status_code=404,
+            detail="No review found for this thread_id to reject.",
+        )
+
+    _clear_thread(payload.thread_id)
+    return RejectResponse(
+        status="rejected",
+        thread_id=payload.thread_id,
+        message="Paused review discarded — graph thread cleared.",
     )

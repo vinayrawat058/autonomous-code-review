@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { approveReview } from "./api/approve";
+import { approveReview, rejectReview } from "./api/approve";
 import { ApprovalModal } from "./components/ApprovalModal";
 import { DiffViewer } from "./components/DiffViewer";
 import { GraphSidebar } from "./components/GraphSidebar";
@@ -127,6 +127,7 @@ export default function App() {
               base_branch: input.base_branch,
               file_path: input.file_path,
               title: input.title,
+              force: input.force,
             });
             markCreatePr("passed");
             setPrUrl(result.pr_url);
@@ -145,8 +146,15 @@ export default function App() {
             setApproving(false);
           }
         }}
-        onReject={() => {
-          setDecision("Rejected — rewrite discarded from this session.");
+        onReject={async () => {
+          if (threadId) {
+            try {
+              await rejectReview(threadId);
+            } catch {
+              // Still clear the local session even if the thread was already gone.
+            }
+          }
+          setDecision("Rejected — paused graph thread cleared.");
           setPrUrl(null);
           setModalOpen(false);
           reset();

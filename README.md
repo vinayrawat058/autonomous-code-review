@@ -13,7 +13,7 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Retrieve (vector RAG)** embeds the local `repo_path` and `data/policies` into **Qdrant** (on-disk by default, no Docker) with **FastEmbed**, then pulls the nearest code chunks and OWASP sections for the diff.
 - **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / live `token` (plus `llm_start` / `llm_end`) / `done` events to the client.
 - **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject.
-- **Approve → PR** — LangGraph pauses with `interrupt_before=["create_pr"]` after sandbox. `POST /api/agent/approve` resumes the graph so the `create_pr` node opens the GitHub PR (dry-run without `GITHUB_TOKEN`).
+- **Approve → PR** — LangGraph pauses with `interrupt_before=["create_pr"]` after sandbox. `POST /api/agent/approve` resumes the graph so the `create_pr` node opens the GitHub PR (dry-run without `GITHUB_TOKEN`). `POST /api/agent/reject` clears the paused thread. Re-using a `thread_id` on `/stream` resets the checkpoint; failed sandbox blocks approve unless `force=true`; a second approve returns the existing PR.
 
 Secrets stay in `backend/.env` and are not committed. Add a GitHub PAT with `repo` scope as `GITHUB_TOKEN` for a real PR.
 
