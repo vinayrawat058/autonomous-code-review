@@ -241,9 +241,13 @@ def _run_review(payload: PRPayload) -> Iterator[dict[str, str]]:
         "refactored_code": refactored,
         "test_errors": final.get("test_errors") or [],
         "iteration": final.get("iteration") or 0,
-        "suggested_file_path": _default_file_path(payload.diff_text, "app.py"),
-        "suggested_file_paths": changed_paths(payload.diff_text)
+        "suggested_file_path": (final.get("changed_files") or [None])[0]
+        or _default_file_path(str(final.get("diff") or payload.diff_text), "app.py"),
+        "suggested_file_paths": list(final.get("changed_files") or [])
+        or changed_paths(str(final.get("diff") or payload.diff_text))
         or [_default_file_path(payload.diff_text, "app.py")],
+        "diff_kind": final.get("diff_kind"),
+        "ingest_warnings": list(final.get("ingest_warnings") or []),
         "awaiting_approval": paused,
         "next_node": "create_pr" if paused else None,
         "can_approve": can_approve,

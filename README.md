@@ -9,7 +9,7 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **Security audit** sends the diff and the OWASP rulebook to Groq and returns a cited finding.
 - **Refactor** rewrites that diff from the finding. On the sample login change, the pasted username becomes a `?` placeholder.
 - **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
-- **Ingest** stores the pasted diff.
+- **Ingest** validates and normalizes the paste (BOM/CRLF stripped, size/file limits, null bytes rejected). Plain Python is wrapped as a synthetic unified diff; real `diff --git` hunks are cleaned and path-counted.
 - **Retrieve (vector RAG)** embeds the local `repo_path` and `data/policies` into **Qdrant** (on-disk by default, no Docker) with **FastEmbed**, then pulls the nearest code chunks and OWASP sections for the diff.
 - **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / live `token` (plus `llm_start` / `llm_end`) / `done` events to the client.
 - **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject.
