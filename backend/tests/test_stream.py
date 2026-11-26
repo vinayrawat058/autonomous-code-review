@@ -45,9 +45,14 @@ def test_stream_emits_started_nodes_and_done():
     names = [name for name, _ in events]
     assert names[0] == "started"
     assert "node" in names
+    assert "interrupt" in names
     assert names[-1] == "done"
     nodes = [payload["active_node"] for name, payload in events if name == "node"]
     assert nodes[:5] == ["ingest", "retrieve", "security", "refactor", "sandbox"]
+    assert "create_pr" not in nodes
+    done = next(payload for name, payload in events if name == "done")
+    assert done["awaiting_approval"] is True
+    assert done["next_node"] == "create_pr"
 
 
 def test_stream_emits_live_tokens(monkeypatch):

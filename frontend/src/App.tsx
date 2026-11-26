@@ -26,6 +26,7 @@ export default function App() {
     liveTokens,
     reset,
     startReview,
+    markCreatePr,
   } = useAgentStream();
 
   const [originalDiff, setOriginalDiff] = useState("");
@@ -117,6 +118,7 @@ export default function App() {
         onApprove={async (input) => {
           if (!threadId) return;
           setApproving(true);
+          markCreatePr("running");
           try {
             const result = await approveReview({
               thread_id: threadId,
@@ -126,6 +128,7 @@ export default function App() {
               file_path: input.file_path,
               title: input.title,
             });
+            markCreatePr("passed");
             setPrUrl(result.pr_url);
             setDecision(
               result.dry_run
@@ -134,6 +137,7 @@ export default function App() {
             );
             setModalOpen(false);
           } catch (err) {
+            markCreatePr("failed");
             setDecision(
               err instanceof Error ? err.message : "Failed to open pull request.",
             );

@@ -13,6 +13,7 @@ const NODES: NodeName[] = [
   "security",
   "refactor",
   "sandbox",
+  "create_pr",
 ];
 
 function idleMap(): Record<NodeName, NodeStatus> {
@@ -135,6 +136,18 @@ export function useAgentStream() {
                 setRefactoredCode(data.text);
               }
             },
+            onInterrupt: () => {
+              setNodeStatus((prev) => {
+                const next = { ...prev };
+                for (const node of NODES) {
+                  if (node === "create_pr") continue;
+                  if (next[node] === "running") next[node] = "passed";
+                  if (next[node] === "idle") next[node] = "passed";
+                }
+                next.create_pr = "idle";
+                return next;
+              });
+            },
             onNode: (data) => {
               const name = String(data.active_node);
               if (!isNodeName(name)) return;
@@ -173,9 +186,14 @@ export function useAgentStream() {
               setTestErrors(data.test_errors ?? []);
               setIteration(data.iteration ?? 0);
               setTokenNode(null);
+              const awaiting = Boolean(data.awaiting_approval);
               setNodeStatus((prev) => {
                 const next = { ...prev };
                 for (const node of NODES) {
+                  if (node === "create_pr" && awaiting) {
+                    next.create_pr = "idle";
+                    continue;
+                  }
                   if (next[node] === "running") next[node] = "passed";
                   if (next[node] === "idle") next[node] = "passed";
                 }
@@ -201,6 +219,10 @@ export function useAgentStream() {
     [markRunning],
   );
 
+  const markCreatePr = useCallback((status: NodeStatus) => {
+    setNodeStatus((prev) => ({ ...prev, create_pr: status }));
+  }, []);
+
   return {
     nodes: NODES,
     nodeStatus,
@@ -215,5 +237,6 @@ export function useAgentStream() {
     liveTokens,
     reset,
     startReview,
+    markCreatePr,
   };
 }
