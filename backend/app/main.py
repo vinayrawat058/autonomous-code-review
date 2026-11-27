@@ -13,7 +13,7 @@ from app.core.config import settings
 
 app = FastAPI(
     title="Agentic PR Review Studio",
-    version="0.1.0",
+    version="0.2.0",
     description="Backend API for agentic PR review, security audit, and refactoring.",
 )
 
