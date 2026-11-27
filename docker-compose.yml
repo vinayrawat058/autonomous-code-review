@@ -1,0 +1,13 @@
+# Build the isolated pytest sandbox image used by SANDBOX_BACKEND=docker|auto.
+#
+#   docker compose build sandbox
+#
+# The API still runs on the host (uvicorn). Each review mounts a temp workdir
+# into this image via `docker run` (network none, memory/cpu limits).
+
+services:
+  sandbox:
+    build:
+      context: ./backend/sandbox
+      dockerfile: Dockerfile
+    image: autonomous-code-review-sandbox:latest

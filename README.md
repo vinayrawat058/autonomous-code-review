@@ -1,6 +1,6 @@
 # Agentic PR Review Studio
 
-**Status:** Work in progress. Backend agent + SSE API + React studio run end to end, including Approve → GitHub PR (dry-run without a token).
+Backend agent + SSE API + React studio run end to end: paste or webhook → security review → refactor → sandbox → human approve → GitHub PR.
 
 ## Done so far
 
@@ -8,7 +8,7 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 
 - **Security audit** sends the diff and the OWASP rulebook to Groq and returns a cited finding.
 - **Refactor** rewrites that diff from the finding. On the sample login change, the pasted username becomes a `?` placeholder.
-- **Sandbox** runs pytest on the rewrite in a temporary folder. A failure goes back to refactor, up to three tries.
+- **Sandbox** runs pytest on the rewrite. With Docker Desktop running (`SANDBOX_BACKEND=auto|docker`), tests execute in an isolated container (`network=none`, memory/CPU caps, read-only mount). Without Docker, it falls back to a local temp folder. Build the image with `docker compose build sandbox`.
 - **Ingest** validates and normalizes the paste (BOM/CRLF stripped, size/file limits, null bytes rejected). Plain Python is wrapped as a synthetic unified diff; real `diff --git` hunks are cleaned and path-counted.
 - **Retrieve (vector RAG)** embeds the local `repo_path` and `data/policies` into **Qdrant** (on-disk by default, no Docker) with **FastEmbed**, then pulls the nearest code chunks and OWASP / Python security sections for the diff. Policy notes cover OWASP Top 10 in review depth plus Python web secure-coding rules.
 - **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / live `token` (plus `llm_start` / `llm_end`) / `done` events to the client.
@@ -19,6 +19,9 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 Secrets stay in `backend/.env` and are not committed. Add a GitHub PAT with `repo` scope as `GITHUB_TOKEN` for a real PR.
 
 ```powershell
+# Optional: build the Docker sandbox image
+docker compose build sandbox
+
 # API
 cd backend
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
@@ -45,12 +48,11 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 
 ## Plan
 
-Build in this order so each piece can be tested before the next one is added.
-
-1. **Core agent (Python / LangGraph)** — done for the local loop (security, refactor, sandbox retry, dual-layer Qdrant RAG). Approve parses full multi-file diffs and writes every touched file into the PR.
-2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step.
+1. **Core agent (Python / LangGraph)** — done (security, refactor, sandbox retry, dual-layer Qdrant RAG). Approve parses full multi-file diffs and writes every touched file into the PR.
+2. **FastAPI + SSE** — done. `POST /api/agent/stream` streams each step.
 3. **React UI** — done (form, SSE hook, Monaco diff, sidebar).
 4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`).
-5. **GitHub App webhook** — done. `POST /api/github/webhook` verifies `X-Hub-Signature-256`, fetches the PR unified diff, runs the agent until interrupt, and posts findings (with `thread_id`) back on the pull request. Set `GITHUB_APP_*` + `GITHUB_WEBHOOK_SECRET` (or `GITHUB_TOKEN` fallback). Paste-only Studio still works.
+5. **GitHub App webhook** — done. `POST /api/github/webhook` verifies signatures, fetches the PR diff, runs the agent until interrupt, and posts findings back on the PR.
+6. **Docker sandbox** — done. Isolated pytest via `backend/sandbox/Dockerfile` + `docker compose build sandbox`; `SANDBOX_BACKEND=auto` falls back to local when Docker is down.
 
-Stack: Python, FastAPI, LangGraph (Sqlite checkpointer + interrupt_before), Qdrant + FastEmbed for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and streams LLM tokens over SSE. Optional next: Docker sandbox.
+Stack: Python, FastAPI, LangGraph (Sqlite checkpointer + interrupt_before), Qdrant + FastEmbed, Docker sandbox, React with Tailwind and Monaco. v1 reviews Python changes and streams LLM tokens over SSE. Optional next: deploy the API for a public webhook URL, wire a live GitHub App.

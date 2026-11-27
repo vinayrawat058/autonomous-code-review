@@ -25,5 +25,4 @@ pytest>=8.0.0
 # GitHub App JWT (webhook installation tokens)
 PyJWT[crypto]>=2.8.0
 
-# Optional later: sandbox isolation
-# docker>=7.0.0
+# Sandbox isolation uses the Docker CLI (no Python docker SDK required)

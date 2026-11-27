@@ -5,6 +5,12 @@ from langgraph.graph import END, StateGraph
 from app.agent.graph import _should_retry
 from app.agent.nodes.execute_sandbox import execute_sandbox_tests
 from app.agent.state import GraphState
+from app.services import sandbox_runner
+
+
+def setup_function() -> None:
+    sandbox_runner.reset_docker_probe_cache()
+
 
 TEST_CODE = """\
 from solution import login
@@ -17,7 +23,8 @@ def test_username_is_not_pasted_into_the_query():
 """
 
 
-def test_concatenated_sql_fails():
+def test_concatenated_sql_fails(monkeypatch):
+    monkeypatch.setattr(sandbox_runner.settings, "sandbox_backend", "local")
     result = execute_sandbox_tests(
         {
             "refactored_code": 'def login(user):\n    return "SELECT " + user\n',
@@ -27,7 +34,8 @@ def test_concatenated_sql_fails():
     assert result["test_errors"]
 
 
-def test_placeholder_query_passes():
+def test_placeholder_query_passes(monkeypatch):
+    monkeypatch.setattr(sandbox_runner.settings, "sandbox_backend", "local")
     result = execute_sandbox_tests(
         {
             "refactored_code": 'def login(user):\n    return "SELECT ?", (user,)\n',
@@ -37,7 +45,8 @@ def test_placeholder_query_passes():
     assert result["test_errors"] == []
 
 
-def test_graph_retries_until_the_rewrite_passes():
+def test_graph_retries_until_the_rewrite_passes(monkeypatch):
+    monkeypatch.setattr(sandbox_runner.settings, "sandbox_backend", "local")
     attempts = {"n": 0}
 
     def fake_refactor(state: GraphState) -> dict:

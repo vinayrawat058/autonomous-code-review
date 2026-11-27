@@ -76,5 +76,13 @@ class Settings(BaseSettings):
     github_webhook_async: bool = True  # return 202 and review in background
     github_webhook_post_review: bool = True  # True=PR review, False=issue comment
 
+    # Sandbox: Docker isolation for rewrite pytest (auto falls back to local)
+    sandbox_backend: str = "auto"  # auto | docker | local
+    sandbox_image: str = "autonomous-code-review-sandbox:latest"
+    sandbox_timeout_seconds: int = 30
+    sandbox_memory: str = "256m"
+    sandbox_cpus: str = "1"
+    sandbox_network_none: bool = True
+
 
 settings = Settings()
