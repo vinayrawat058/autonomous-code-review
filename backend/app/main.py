@@ -8,7 +8,7 @@ From the backend folder:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import agent, github_webhook
+from app.api.routes import agent, github_app_setup, github_webhook
 from app.core.config import settings
 
 app = FastAPI(
@@ -27,6 +27,7 @@ app.add_middleware(
 
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(github_webhook.router, prefix="/api/github", tags=["github"])
+app.include_router(github_app_setup.router, prefix="/api/github", tags=["github-setup"])
 
 
 @app.get("/health")

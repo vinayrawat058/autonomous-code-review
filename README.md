@@ -55,4 +55,6 @@ Most “AI code review” demos are a single chat prompt over a pasted diff. Thi
 5. **GitHub App webhook** — done. `POST /api/github/webhook` verifies signatures, fetches the PR diff, runs the agent until interrupt, and posts findings back on the PR.
 6. **Docker sandbox** — done. Isolated pytest via `backend/sandbox/Dockerfile` + `docker compose build sandbox`; `SANDBOX_BACKEND=auto` falls back to local when Docker is down.
 
-Stack: Python, FastAPI, LangGraph (Sqlite checkpointer + interrupt_before), Qdrant + FastEmbed, Docker sandbox, React with Tailwind and Monaco. v1 reviews Python changes and streams LLM tokens over SSE. Optional next: deploy the API for a public webhook URL, wire a live GitHub App.
+Stack: Python, FastAPI, LangGraph (Sqlite checkpointer + interrupt_before), Qdrant + FastEmbed, Docker sandbox, React with Tailwind and Monaco. v1 reviews Python changes and streams LLM tokens over SSE.
+
+**Live GitHub App:** see [docs/github-app-setup.md](docs/github-app-setup.md). With the API on `:8000` and a Cloudflare tunnel, open `/api/github/app-setup?public_base=https://YOUR_TUNNEL` to register the App via manifest, then install it on the repo.

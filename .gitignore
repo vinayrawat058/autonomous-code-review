@@ -5,6 +5,8 @@ __pycache__/
 .venv/
 venv/
 .env
+backend/.secrets/
+*.pem
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
