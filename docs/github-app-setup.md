@@ -39,7 +39,7 @@ Click **Create GitHub App** while signed into GitHub. GitHub redirects back to l
 - `backend/.env` — `GITHUB_APP_ID`, `GITHUB_WEBHOOK_SECRET`, key path
 - `backend/.secrets/github-app.pem` — private key (**gitignored**)
 
-Then install the App on `autonomous-code-review`. Permissions:
+Then install the App on `autonomous-code-review` (App JWT alone is not enough until an installation exists). Permissions:
 
 - **Pull requests:** Read & write
 - **Contents:** Read
