@@ -44,7 +44,7 @@ def review_pull_request_event(event: PullRequestEvent) -> WebhookReviewResult:
         )
 
     try:
-        token = get_installation_token(installation_id or 0)
+        token = get_installation_token(installation_id if installation_id else 0)
         diff = fetch_pull_request_diff(
             owner=event.owner,
             repo=event.repo,

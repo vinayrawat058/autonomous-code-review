@@ -1,0 +1,17 @@
+{
+  "name": "Agentic PR Review Studio",
+  "url": "https://github.com/vinayrawat058/autonomous-code-review",
+  "hook_attributes": {
+    "url": "https://REPLACE_WITH_TUNNEL_HOST/api/github/webhook",
+    "active": true
+  },
+  "redirect_url": "http://127.0.0.1:8000/api/github/app-manifest/callback",
+  "callback_urls": ["http://127.0.0.1:8000/api/github/app-manifest/callback"],
+  "public": false,
+  "default_events": ["pull_request"],
+  "default_permissions": {
+    "contents": "read",
+    "metadata": "read",
+    "pull_requests": "write"
+  }
+}

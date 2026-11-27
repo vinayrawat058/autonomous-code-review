@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-label="Agentic PR Review Studio architecture">
+  <defs>
+    <style>
+      .title { font: 700 18px "Segoe UI", system-ui, sans-serif; fill: #0f172a; }
+      .sub { font: 500 12px "Segoe UI", system-ui, sans-serif; fill: #334155; }
+      .tiny { font: 500 11px "Segoe UI", system-ui, sans-serif; fill: #475569; }
+      .label { font: 600 11px "Segoe UI", system-ui, sans-serif; fill: #1e293b; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #94a3b8; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .box { stroke-width: 1.5; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <rect width="1280" height="820" fill="#f8fafc" />
+  <text x="40" y="42" class="title">Agentic PR Review Studio  Architecture</text>
+  <text x="40" y="64" class="sub">React � FastAPI � LangGraph � (LangChain � Groq for security + refactor only)</text>
+
+  <!-- React -->
+  <rect x="40" y="90" width="1200" height="90" rx="12" fill="#dbeafe" stroke="#2563eb" class="box" />
+  <text x="60" y="122" class="title">REACT  frontend/</text>
+  <text x="60" y="148" class="sub">ReviewForm � GraphSidebar � Monaco Diff � ApprovalModal</text>
+
+  <!-- arrows React <-> FastAPI -->
+  <path d="M220 180 L220 210" class="arrow" />
+  <text x="230" y="200" class="tiny">POST /api/agent/stream (diff, repo_path, test_code)</text>
+  <path d="M980 210 L980 180" class="arrow" />
+  <text x="760" y="200" class="tiny">SSE: started / node / done � approve � PR url</text>
+
+  <!-- FastAPI -->
+  <rect x="40" y="210" width="1200" height="90" rx="12" fill="#dcfce7" stroke="#16a34a" class="box" />
+  <text x="60" y="242" class="title">FASTAPI  backend/app/main.py � api/routes/agent.py</text>
+  <text x="60" y="268" class="sub">HTTP + CORS + SSE streaming + approve � stores review by thread_id � GitHub REST (PR)</text>
+
+  <path d="M220 300 L220 330" class="arrow" />
+  <text x="230" y="320" class="tiny">workflow.stream(GraphState)</text>
+
+  <!-- LangGraph -->
+  <rect x="40" y="330" width="1200" height="200" rx="12" fill="#ffedd5" stroke="#ea580c" class="box" />
+  <text x="60" y="362" class="title">LANGGRAPH  backend/app/agent/graph.py � shared GraphState</text>
+
+  <!-- pipeline nodes -->
+  <rect x="70" y="390" width="150" height="54" rx="8" fill="#fff7ed" stroke="#c2410c" />
+  <text x="110" y="422" class="label">ingest</text>
+
+  <rect x="280" y="390" width="150" height="54" rx="8" fill="#fff7ed" stroke="#c2410c" />
+  <text x="310" y="422" class="label">retrieve (RAG)</text>
+
+  <rect x="490" y="390" width="150" height="54" rx="8" fill="#fff7ed" stroke="#c2410c" />
+  <text x="525" y="422" class="label">security</text>
+
+  <rect x="700" y="390" width="150" height="54" rx="8" fill="#fff7ed" stroke="#c2410c" />
+  <text x="735" y="422" class="label">refactor</text>
+
+  <rect x="910" y="390" width="150" height="54" rx="8" fill="#fff7ed" stroke="#c2410c" />
+  <text x="945" y="422" class="label">sandbox</text>
+
+  <path d="M220 417 L280 417" class="arrow" />
+  <path d="M430 417 L490 417" class="arrow" />
+  <path d="M640 417 L700 417" class="arrow" />
+  <path d="M850 417 L910 417" class="arrow" />
+
+  <!-- retry -->
+  <path d="M985 444 C985 500 775 500 775 444" class="arrow-soft" />
+  <text x="820" y="492" class="tiny">retry if tests fail � iter &lt; 3</text>
+
+  <text x="70" y="500" class="tiny">ingest.py save diff � retrieve.py dual RAG (no LLM) � security.py + refactor.py � execute_sandbox.py pytest</text>
+
+  <!-- LangChain + Groq -->
+  <path d="M565 484 L565 560" class="arrow" />
+  <path d="M775 484 L775 560" class="arrow" />
+  <text x="585" y="540" class="tiny">only these two call the model</text>
+
+  <rect x="320" y="560" width="420" height="90" rx="12" fill="#fef9c3" stroke="#ca8a04" class="box" />
+  <text x="340" y="595" class="title">LANGCHAIN  agent/llm.py</text>
+  <text x="340" y="620" class="sub">ChatOpenAI + HumanMessage</text>
+
+  <path d="M740 605 L860 605" class="arrow" />
+  <text x="770" y="590" class="tiny">HTTPS</text>
+
+  <rect x="860" y="560" width="280" height="90" rx="12" fill="#ede9fe" stroke="#7c3aed" class="box" />
+  <text x="890" y="595" class="title">GROQ API</text>
+  <text x="890" y="620" class="sub">findings + rewritten code</text>
+
+  <!-- legend -->
+  <rect x="40" y="690" width="1200" height="90" rx="12" fill="#ffffff" stroke="#cbd5e1" />
+  <text x="60" y="722" class="title">Where each piece sits</text>
+  <text x="60" y="748" class="sub">React = UI � FastAPI = HTTP/SSE/GitHub � LangGraph = 5-step state machine � Retrieve = local code + OWASP files � LangChain/Groq = security + refactor only � Sandbox = pytest</text>
+</svg>
