@@ -68,12 +68,13 @@ def get_installation_token(installation_id: int | str) -> str:
             or (settings.github_app_private_key_path or "").strip()
         )
     )
-    if not has_app:
-        token = (settings.github_token or "").strip()
-        if token:
-            return token
+    token_fallback = (settings.github_token or "").strip()
+    # Repo webhooks (and misconfigured installs) have no installation id — use PAT.
+    if not has_app or not str(installation_id).strip() or str(installation_id) in {"0", "None"}:
+        if token_fallback:
+            return token_fallback
         raise GitHubAppAuthError(
-            "Configure GitHub App credentials or GITHUB_TOKEN to call the GitHub API."
+            "Configure GitHub App credentials (with an installation id) or GITHUB_TOKEN."
         )
 
     jwt_token = create_app_jwt()
