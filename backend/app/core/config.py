@@ -65,5 +65,16 @@ class Settings(BaseSettings):
     github_default_repo: str = ""
     github_default_base: str = "main"
 
+    # GitHub App + webhook (review real PRs instead of paste-only)
+    github_app_id: str = ""
+    github_app_private_key: str = ""  # PEM with \n escapes, or use path below
+    github_app_private_key_path: str = ""
+    github_app_installation_id: str = ""  # fallback if payload has no installation
+    github_webhook_secret: str = ""
+    github_webhook_require_secret: bool = True
+    github_webhook_review_drafts: bool = False
+    github_webhook_async: bool = True  # return 202 and review in background
+    github_webhook_post_review: bool = True  # True=PR review, False=issue comment
+
 
 settings = Settings()
