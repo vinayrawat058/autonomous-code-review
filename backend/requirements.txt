@@ -22,6 +22,8 @@ fastembed>=0.4.0
 # Sandbox tests
 pytest>=8.0.0
 
-# Optional later: GitHub PR creation, sandbox, AST
-# PyGithub>=2.4.0
+# GitHub App JWT (webhook installation tokens)
+PyJWT[crypto]>=2.8.0
+
+# Optional later: sandbox isolation
 # docker>=7.0.0

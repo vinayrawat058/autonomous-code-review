@@ -14,6 +14,7 @@ The agent walks five steps: ingest the diff, load context, security audit, refac
 - **FastAPI SSE** — `POST /api/agent/stream` runs the graph and pushes `started` / `node` / live `token` (plus `llm_start` / `llm_end`) / `done` events to the client.
 - **React studio** — paste a diff, watch the graph sidebar update from SSE, see original vs rewrite in Monaco, then Approve / Reject.
 - **Approve → PR** — LangGraph pauses with `interrupt_before=["create_pr"]` after sandbox. `POST /api/agent/approve` resumes the graph so the `create_pr` node opens the GitHub PR (dry-run without `GITHUB_TOKEN`). `POST /api/agent/reject` clears the paused thread. Checkpoints persist in Sqlite (survive API restart). Re-using a `thread_id` resets the checkpoint; empty diffs are rejected; failed sandbox blocks approve unless `force=true`; paused reviews expire after `APPROVE_TTL_SECONDS`; a second approve returns the existing PR.
+- **GitHub webhook** — install a GitHub App and point it at `POST /api/github/webhook`. On `pull_request` opened/synchronize/reopened, the API fetches the real PR diff, runs the same agent, and comments findings on the PR (`thread_id` included for Studio approve).
 
 Secrets stay in `backend/.env` and are not committed. Add a GitHub PAT with `repo` scope as `GITHUB_TOKEN` for a real PR.
 
@@ -50,5 +51,6 @@ Build in this order so each piece can be tested before the next one is added.
 2. **FastAPI + SSE** — done for node updates. `POST /api/agent/stream` streams each step.
 3. **React UI** — done (form, SSE hook, Monaco diff, sidebar).
 4. **Approve → GitHub PR** — done (dry-run without token; real PR with `GITHUB_TOKEN`).
+5. **GitHub App webhook** — done. `POST /api/github/webhook` verifies `X-Hub-Signature-256`, fetches the PR unified diff, runs the agent until interrupt, and posts findings (with `thread_id`) back on the pull request. Set `GITHUB_APP_*` + `GITHUB_WEBHOOK_SECRET` (or `GITHUB_TOKEN` fallback). Paste-only Studio still works.
 
 Stack: Python, FastAPI, LangGraph (Sqlite checkpointer + interrupt_before), Qdrant + FastEmbed for the two RAG layers, React with Tailwind and the Monaco diff editor. v1 reviews Python changes and streams LLM tokens over SSE. Optional next: Docker sandbox.
